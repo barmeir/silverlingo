@@ -4,9 +4,13 @@
 
 @layer base {
   body {
-    font-family: var(--font-jakarta), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--font-jakarta), var(--font-heebo), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background-color: #2A0952;
     color: #ffffff;
+  }
+
+  .font-heebo {
+    font-family: var(--font-heebo), var(--font-jakarta), system-ui, sans-serif;
   }
 }
 

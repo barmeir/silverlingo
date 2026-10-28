@@ -7,6 +7,7 @@ import {
   localSlotToUTC,
   utcSlotToLocalKey,
 } from "@/lib/timezone";
+import { useLanguage } from "@/context/LanguageContext";
 import {
   Sunrise,
   Sun,
@@ -19,26 +20,22 @@ import {
 } from "lucide-react";
 
 const DAYS_OF_WEEK = [
-  { index: 0, short: "Sun", full: "Sunday" },
-  { index: 1, short: "Mon", full: "Monday" },
-  { index: 2, short: "Tue", full: "Tuesday" },
-  { index: 3, short: "Wed", full: "Wednesday" },
-  { index: 4, short: "Thu", full: "Thursday" },
-  { index: 5, short: "Fri", full: "Friday" },
-  { index: 6, short: "Sat", full: "Saturday" },
+  { index: 0, shortEn: "Sun", fullEn: "Sunday", shortHe: "א׳", fullHe: "יום ראשון" },
+  { index: 1, shortEn: "Mon", fullEn: "Monday", shortHe: "ב׳", fullHe: "יום שני" },
+  { index: 2, shortEn: "Tue", fullEn: "Tuesday", shortHe: "ג׳", fullHe: "יום שלישי" },
+  { index: 3, shortEn: "Wed", fullEn: "Wednesday", shortHe: "ד׳", fullHe: "יום רביעי" },
+  { index: 4, shortEn: "Thu", fullEn: "Thursday", shortHe: "ה׳", fullHe: "יום חמישי" },
+  { index: 5, shortEn: "Fri", fullEn: "Friday", shortHe: "ו׳", fullHe: "יום שישי" },
+  { index: 6, shortEn: "Sat", fullEn: "Saturday", shortHe: "ש׳", fullHe: "יום שבת" },
 ];
 
 type TimePeriod = "morning" | "afternoon" | "evening";
 
-/**
- * Generates 30-minute time strings ("HH:mm") for a chosen part of the day
- * so the Elderly Host never deals with tiny scrollbars or dense grids.
- */
 function getSlotsForPeriod(period: TimePeriod): string[] {
   const ranges: Record<TimePeriod, [number, number]> = {
-    morning: [9, 12],    // 9:00 AM - 11:30 AM (6 slots)
-    afternoon: [12, 16], // 12:00 PM - 3:30 PM (8 slots)
-    evening: [16, 20],   // 4:00 PM - 7:30 PM (8 slots)
+    morning: [9, 12],
+    afternoon: [12, 16],
+    evening: [16, 20],
   };
 
   const [startHour, endHour] = ranges[period];
@@ -63,8 +60,8 @@ const DEFAULT_DEMO_SLOTS = [
 
 export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
   const supabase = createClient();
+  const { lang } = useLanguage();
 
-  // Set of selected local slot keys formatted as `${dayIndex}-${HH:mm}`
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(
     () => new Set(DEFAULT_DEMO_SLOTS)
   );
@@ -79,7 +76,64 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
       ? Intl.DateTimeFormat().resolvedOptions().timeZone
       : "Local Time";
 
-  // Load existing UTC availability from Supabase and convert to local timezone
+  const t = {
+    en: {
+      localTimeBadge: `Shown in your local time: ${userTimezone}`,
+      title: "When would you like to chat with learners?",
+      subtitle:
+        "Tap any box below—or press and drag across several boxes—to mark when you are free for a friendly 30-minute video call.",
+      selectedSlotsLabel: "Selected Slots",
+      minUnit: "min",
+      savingBtn: "Saving Schedule...",
+      saveBtn: "Save My Schedule",
+      savedMsg: (count: number) =>
+        `Schedule saved! You have ${count} weekly 30-minute chat slots open (automatically saved in UTC).`,
+      step1Title: "1. Pick a part of the day:",
+      legendFree: "Available (Free)",
+      legendOpen: "Unavailable (Tap to open)",
+      morning: "Morning",
+      morningSub: "9:00 AM – 12:00 PM",
+      afternoon: "Afternoon",
+      afternoonSub: "12:00 PM – 4:00 PM",
+      evening: "Evening",
+      eveningSub: "4:00 PM – 8:00 PM",
+      viewing: "Viewing",
+      step2Title: "2. Tap or drag across 30-minute time slots:",
+      dragTip:
+        "Tip: Hold down your mouse button and drag to paint multiple slots!",
+      timeCol: "Time",
+      freeBtn: "Free",
+      openBtn: "Open",
+    },
+    he: {
+      localTimeBadge: `מוצג לפי השעון המקומי שלך: ${userTimezone}`,
+      title: "מתי נוח לך לשוחח עם תלמידים?",
+      subtitle:
+        "לחצו על כל משבצת למטה — או לחצו וגררו על פני מספר משבצות — כדי לסמן מתי אתם פנויים לשיחת וידאו ידידותית של 30 דקות.",
+      selectedSlotsLabel: "משבצות שנבחרו",
+      minUnit: "דק׳",
+      savingBtn: "שומר יומן...",
+      saveBtn: "שמירת היומן שלי",
+      savedMsg: (count: number) =>
+        `היומן נשמר בהצלחה! פתחתם ${count} משבצות שבועיות של 30 דקות (נשמר אוטומטית ב-UTC).`,
+      step1Title: "1. בחרו חלק ביום:",
+      legendFree: "פנוי לשיחה (נבחר)",
+      legendOpen: "לא נבחר (לחצו לפתיחה)",
+      morning: "בוקר",
+      morningSub: "9:00 – 12:00",
+      afternoon: "צהריים",
+      afternoonSub: "12:00 – 16:00",
+      evening: "ערב",
+      eveningSub: "16:00 – 20:00",
+      viewing: "מוצג כעת",
+      step2Title: "2. לחצו או גררו על פני משבצות של 30 דקות:",
+      dragTip: "טיפ: החזיקו את כפתור העכבר לחוץ וגררו כדי לסמן מספר שעות ברצף!",
+      timeCol: "שעה",
+      freeBtn: "פנוי",
+      openBtn: "סמן",
+    },
+  }[lang];
+
   useEffect(() => {
     async function fetchAvailability() {
       try {
@@ -96,13 +150,12 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
           setSelectedSlots(loaded);
         }
       } catch {
-        // Keep friendly demo defaults when running without Supabase credentials
+        // Keep demo defaults
       }
     }
     fetchAvailability();
   }, [hostId, supabase]);
 
-  // Global mouseup / touchend listener so dragging stops cleanly anywhere on screen
   useEffect(() => {
     const stopDragging = () => setIsDragging(false);
     window.addEventListener("mouseup", stopDragging);
@@ -147,7 +200,6 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
     setSaveBanner(null);
 
     try {
-      // Convert all painted local slots into UTC 30-minute records
       const utcPayload = Array.from(selectedSlots).map((key) => {
         const [dayStr, time24] = key.split("-");
         const utc = localSlotToUTC(Number(dayStr), time24);
@@ -178,13 +230,9 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
         await new Promise((r) => setTimeout(r, 400));
       }
 
-      setSaveBanner(
-        `Schedule saved! You have ${utcPayload.length} weekly 30-minute chat slots open (automatically saved in UTC).`
-      );
+      setSaveBanner(t.savedMsg(utcPayload.length));
     } catch {
-      setSaveBanner(
-        `Saved ${selectedSlots.size} weekly 30-minute slots for your profile!`
-      );
+      setSaveBanner(t.savedMsg(selectedSlots.size));
     } finally {
       setSaving(false);
     }
@@ -203,16 +251,15 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
           <div className="space-y-3 max-w-3xl">
             <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-purple-100 text-[#4A148C] font-extrabold text-[18px]">
               <Clock className="w-5 h-5" />
-              <span>Shown in your local time: {userTimezone}</span>
+              <span>{t.localTimeBadge}</span>
             </div>
 
             <h1 className="text-[32px] sm:text-[40px] font-extrabold text-slate-950 tracking-tight leading-tight">
-              When would you like to chat with learners?
+              {t.title}
             </h1>
 
             <p className="text-[20px] text-slate-700 leading-relaxed">
-              Tap any box below—or press and drag across several boxes—to mark
-              when you are free for a friendly 30-minute video call.
+              {t.subtitle}
             </p>
           </div>
 
@@ -220,10 +267,10 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-6 shrink-0">
             <div className="px-6 py-4 rounded-2xl bg-purple-50 border-2 border-purple-200 text-center">
               <span className="block text-[18px] font-bold text-slate-700">
-                Selected Slots
+                {t.selectedSlotsLabel}
               </span>
               <span className="text-[30px] font-extrabold text-[#4A148C]">
-                {selectedSlots.size} × 30 min
+                {selectedSlots.size} × 30 {t.minUnit}
               </span>
             </div>
 
@@ -234,7 +281,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
               className="min-h-[72px] px-9 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] active:scale-[0.99] text-white font-extrabold text-[22px] shadow-[0_12px_28px_-6px_rgba(255,109,0,0.65)] transition-all flex items-center justify-center gap-3 focus:outline-none focus:ring-4 focus:ring-offset-4 focus:ring-[#FF6D00]"
             >
               <CheckCircle2 className="w-7 h-7" />
-              <span>{saving ? "Saving Schedule..." : "Save My Schedule"}</span>
+              <span>{saving ? t.savingBtn : t.saveBtn}</span>
             </button>
           </div>
         </div>
@@ -257,7 +304,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <h2 className="text-[24px] font-extrabold text-slate-950">
-              1. Pick a part of the day:
+              {t.step1Title}
             </h2>
 
             {/* Clear Visual Legend */}
@@ -266,40 +313,40 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                 <span className="w-8 h-8 rounded-xl bg-[#4A148C] text-white inline-flex items-center justify-center shadow-sm">
                   <Check className="w-5 h-5" />
                 </span>
-                <span>Available (Free)</span>
+                <span>{t.legendFree}</span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="w-8 h-8 rounded-xl bg-white border-2 border-slate-300 text-slate-500 inline-flex items-center justify-center">
                   <Plus className="w-5 h-5" />
                 </span>
-                <span>Unavailable (Tap to open)</span>
+                <span>{t.legendOpen}</span>
               </div>
             </div>
           </div>
 
           <div
             role="tablist"
-            aria-label="Time of day"
+            aria-label={t.step1Title}
             className="grid grid-cols-1 md:grid-cols-3 gap-6"
           >
             {(
               [
                 {
                   id: "morning",
-                  label: "Morning",
-                  sub: "9:00 AM – 12:00 PM",
+                  label: t.morning,
+                  sub: t.morningSub,
                   Icon: Sunrise,
                 },
                 {
                   id: "afternoon",
-                  label: "Afternoon",
-                  sub: "12:00 PM – 4:00 PM",
+                  label: t.afternoon,
+                  sub: t.afternoonSub,
                   Icon: Sun,
                 },
                 {
                   id: "evening",
-                  label: "Evening",
-                  sub: "4:00 PM – 8:00 PM",
+                  label: t.evening,
+                  sub: t.eveningSub,
                   Icon: Moon,
                 },
               ] as const
@@ -318,7 +365,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                       : "bg-white text-slate-900 border-slate-300 hover:border-slate-700 hover:bg-slate-50"
                   }`}
                 >
-                  <div className="flex items-center gap-3.5 text-left">
+                  <div className="flex items-center gap-3.5 text-start">
                     <Icon
                       className={`w-7 h-7 shrink-0 ${
                         active ? "text-[#FF6D00]" : "text-[#4A148C]"
@@ -337,7 +384,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                   </div>
                   {active && (
                     <span className="px-3 py-1 rounded-full bg-white/15 text-[16px] font-bold">
-                      Viewing
+                      {t.viewing}
                     </span>
                   )}
                 </button>
@@ -350,11 +397,11 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-[24px] font-extrabold text-slate-950">
-              2. Tap or drag across 30-minute time slots:
+              {t.step2Title}
             </h2>
             <span className="hidden md:inline-flex items-center gap-2 text-[18px] font-bold text-[#4A148C]">
               <Sparkles className="w-5 h-5" />
-              Tip: Hold down your mouse button and drag to paint multiple slots!
+              <span>{t.dragTip}</span>
             </span>
           </div>
 
@@ -362,8 +409,8 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
             <div className="min-w-[980px] bg-slate-100/80 border-2 border-slate-200 rounded-3xl p-6 space-y-6">
               {/* Day Column Headers */}
               <div className="grid grid-cols-8 gap-6 items-center">
-                <div className="text-[20px] font-extrabold text-slate-700 text-right pr-3">
-                  Time
+                <div className="text-[20px] font-extrabold text-slate-700 text-center">
+                  {t.timeCol}
                 </div>
                 {DAYS_OF_WEEK.map((day) => (
                   <div
@@ -371,10 +418,10 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                     className="text-center py-3.5 rounded-2xl bg-white border-2 border-slate-300 shadow-sm"
                   >
                     <span className="block text-[22px] font-extrabold text-[#4A148C]">
-                      {day.short}
+                      {lang === "he" ? day.shortHe : day.shortEn}
                     </span>
                     <span className="block text-[16px] font-semibold text-slate-600">
-                      {day.full}
+                      {lang === "he" ? day.fullHe : day.fullEn}
                     </span>
                   </div>
                 ))}
@@ -387,7 +434,10 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                   className="grid grid-cols-8 gap-6 items-center"
                 >
                   {/* Row Time Label (20px bold) */}
-                  <div className="text-[20px] font-extrabold text-slate-900 text-right pr-3">
+                  <div
+                    dir="ltr"
+                    className="text-[20px] font-extrabold text-slate-900 text-center"
+                  >
                     {format12Hour(time24)}
                   </div>
 
@@ -395,6 +445,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                   {DAYS_OF_WEEK.map((day) => {
                     const key = `${day.index}-${time24}`;
                     const isSelected = selectedSlots.has(key);
+                    const dayName = lang === "he" ? day.fullHe : day.fullEn;
 
                     return (
                       <button
@@ -412,9 +463,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                           }
                         }}
                         aria-pressed={isSelected}
-                        aria-label={`${day.full} at ${format12Hour(time24)}, ${
-                          isSelected ? "Available" : "Not available"
-                        }`}
+                        aria-label={`${dayName} ${format12Hour(time24)}`}
                         className={`min-h-[64px] rounded-2xl border-2 font-extrabold text-[19px] transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-4 focus:ring-[#FF6D00] ${
                           isSelected
                             ? "bg-[#4A148C] text-white border-[#2A0854] shadow-md scale-[1.02]"
@@ -424,12 +473,12 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                         {isSelected ? (
                           <>
                             <Check className="w-6 h-6 stroke-[3]" />
-                            <span>Free</span>
+                            <span>{t.freeBtn}</span>
                           </>
                         ) : (
                           <>
                             <Plus className="w-5 h-5 text-slate-400" />
-                            <span>Open</span>
+                            <span>{t.openBtn}</span>
                           </>
                         )}
                       </button>

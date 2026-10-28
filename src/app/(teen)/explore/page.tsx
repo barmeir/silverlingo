@@ -3,24 +3,31 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import HostCard, { HostProfile } from "@/components/teen/HostCard";
+import { useLanguage } from "@/context/LanguageContext";
 import { Globe2, Sparkles, Flame, Compass } from "lucide-react";
 
 const DEMO_HOSTS: HostProfile[] = [
   {
     id: "00000000-0000-0000-0000-000000000001",
     fullName: "Arthur Pendelton",
+    fullNameHe: "ארתור פנדלטון",
     age: 74,
     country: "United Kingdom",
+    countryHe: "בריטניה",
     city: "Manchester",
+    cityHe: "מנצ׳סטר",
     formerRole: "Retired High School History Teacher",
+    formerRoleHe: "מורה להיסטוריה בתיכון (בגמלאות)",
     rating: "5.0",
     callsCompleted: 84,
     bio: "Lifelong football supporter and Marvel movie fan! I love hearing what teenagers around the world are passionate about and helping you sound natural in English.",
+    bioHe:
+      "אוהד כדורגל מושבע וחובב סרטי מארוול! אני אוהב לשמוע מבני נוער מכל העולם על התחביבים שלהם ולעזור לכם לדבר אנגלית בביטחון ובטבעיות.",
     avatarUrl: "/avatars/arthur.png",
     hobbies: [
-      { name: "Football", icon: "⚽" },
-      { name: "Classic Movies & Marvel", icon: "🎬" },
-      { name: "World History", icon: "🏛️" },
+      { name: "Football", nameHe: "כדורגל", icon: "⚽" },
+      { name: "Classic Movies & Marvel", nameHe: "קולנוע ומארוול", icon: "🎬" },
+      { name: "World History", nameHe: "היסטוריה עולמית", icon: "🏛️" },
     ],
     sharedHobbies: ["Football", "Classic Movies & Marvel"],
     availableSlots: [
@@ -37,18 +44,24 @@ const DEMO_HOSTS: HostProfile[] = [
   {
     id: "00000000-0000-0000-0000-000000000003",
     fullName: "Eleanor Vance",
+    fullNameHe: "אלינור ואנס",
     age: 69,
     country: "Canada",
+    countryHe: "קנדה",
     city: "Vancouver",
+    cityHe: "ונקובר",
     formerRole: "Former Artisan Bakery Owner",
+    formerRoleHe: "בעלת מאפייה בוטיק לשעבר",
     rating: "4.9",
     callsCompleted: 62,
     bio: "I spent 35 years running a neighborhood bakery. I love trading recipes, chatting about classic rock & vinyl records, and cheering on young English learners.",
+    bioHe:
+      "ניהלתי מאפייה שכונתית במשך 35 שנה. אני אוהבת להחליף מתכונים, לדבר על מוזיקה ותקליטים, ולעודד צעירים לתרגל אנגלית בכיף.",
     avatarUrl: "/avatars/eleanor.png",
     hobbies: [
-      { name: "Baking & Cooking", icon: "🥐" },
-      { name: "Music & Vinyl", icon: "🎸" },
-      { name: "Gardening", icon: "🌻" },
+      { name: "Baking & Cooking", nameHe: "אפייה ובישול", icon: "🥐" },
+      { name: "Music & Vinyl", nameHe: "מוזיקה ותקליטים", icon: "🎸" },
+      { name: "Gardening", nameHe: "גינון", icon: "🌻" },
     ],
     sharedHobbies: ["Music & Vinyl"],
     availableSlots: [
@@ -65,18 +78,24 @@ const DEMO_HOSTS: HostProfile[] = [
   {
     id: "00000000-0000-0000-0000-000000000004",
     fullName: "Walter Miller",
+    fullNameHe: "וולטר מילר",
     age: 78,
     country: "United States",
+    countryHe: "ארצות הברית",
     city: "Denver, CO",
+    cityHe: "דנבר, קולורדו",
     formerRole: "Retired National Park Ranger",
+    formerRoleHe: "פקח פארקים לאומיים (בגמלאות)",
     rating: "5.0",
     callsCompleted: 119,
     bio: "Spent four decades in the Rocky Mountains. Chess enthusiast and storyteller who enjoys learning about your country, sports, and favorite games.",
+    bioHe:
+      "עבדתי 40 שנה בהרי הרוקי. חובב שחמט וסיפורי מסעות, ונהנה מאוד להכיר צעירים מכל העולם ולשמוע על המדינה והתחביבים שלכם.",
     avatarUrl: "/avatars/walter.png",
     hobbies: [
-      { name: "Board Games & Chess", icon: "♟️" },
-      { name: "Travel Stories", icon: "✈️" },
-      { name: "Football", icon: "⚽" },
+      { name: "Board Games & Chess", nameHe: "שחמט ומשחקי קופסה", icon: "♟️" },
+      { name: "Travel Stories", nameHe: "סיפורי טיולים", icon: "✈️" },
+      { name: "Football", nameHe: "כדורגל", icon: "⚽" },
     ],
     sharedHobbies: ["Football", "Board Games & Chess"],
     availableSlots: [
@@ -92,8 +111,26 @@ const DEMO_HOSTS: HostProfile[] = [
   },
 ];
 
+const HOBBY_FILTERS = [
+  { id: "All", en: "All", he: "הכל" },
+  { id: "Football", en: "Football", he: "כדורגל" },
+  {
+    id: "Classic Movies & Marvel",
+    en: "Classic Movies & Marvel",
+    he: "קולנוע ומארוול",
+  },
+  { id: "Music & Vinyl", en: "Music & Vinyl", he: "מוזיקה ותקליטים" },
+  { id: "Baking & Cooking", en: "Baking & Cooking", he: "אפייה ובישול" },
+  {
+    id: "Board Games & Chess",
+    en: "Board Games & Chess",
+    he: "שחמט ומשחקי קופסה",
+  },
+];
+
 export default function TeenExplorePage() {
   const router = useRouter();
+  const { lang } = useLanguage();
   const [selectedHobbyFilter, setSelectedHobbyFilter] = useState<string>("All");
 
   const learnerName = "Mateo";
@@ -152,48 +189,79 @@ export default function TeenExplorePage() {
             <div className="space-y-2.5">
               <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-100 bg-white/10 backdrop-blur-md px-3.5 py-1 rounded-full border border-white/15">
                 <Sparkles className="w-3.5 h-3.5 text-[#FF6D00]" />
-                <span>AI Hobby Matcher • +50 XP per 30-Min Call</span>
+                <span>
+                  {lang === "he"
+                    ? "התאמת תחביבים ב-AI • +50 XP לכל שיחה"
+                    : "AI Hobby Matcher • +50 XP per 30-Min Call"}
+                </span>
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                Hey {learnerName}! Ready to practice English today?
+                {lang === "he"
+                  ? "היי מתיאו! מוכן לתרגל אנגלית היום?"
+                  : `Hey ${learnerName}! Ready to practice English today?`}
               </h1>
 
               <p className="text-sm sm:text-[15px] text-purple-100/90 leading-relaxed">
-                We matched you with native-speaking Hosts who share your love for{" "}
-                <span className="text-white font-semibold underline decoration-[#FF6D00]">
-                  Football
-                </span>
-                ,{" "}
-                <span className="text-white font-semibold underline decoration-[#FF6D00]">
-                  Marvel Movies
-                </span>
-                , and{" "}
-                <span className="text-white font-semibold underline decoration-[#FF6D00]">
-                  Music
-                </span>
-                .
+                {lang === "he" ? (
+                  <>
+                    מצאנו עבורך מארחים דוברי אנגלית שפת אם שחולקים איתך אהבה ל
+                    <span className="text-white font-semibold underline decoration-[#FF6D00] mx-1">
+                      כדורגל
+                    </span>
+                    ,
+                    <span className="text-white font-semibold underline decoration-[#FF6D00] mx-1">
+                      סרטי מארוול
+                    </span>
+                    ו
+                    <span className="text-white font-semibold underline decoration-[#FF6D00] mx-1">
+                      מוזיקה
+                    </span>
+                    .
+                  </>
+                ) : (
+                  <>
+                    We matched you with native-speaking Hosts who share your
+                    love for{" "}
+                    <span className="text-white font-semibold underline decoration-[#FF6D00]">
+                      Football
+                    </span>
+                    ,{" "}
+                    <span className="text-white font-semibold underline decoration-[#FF6D00]">
+                      Marvel Movies
+                    </span>
+                    , and{" "}
+                    <span className="text-white font-semibold underline decoration-[#FF6D00]">
+                      Music
+                    </span>
+                    .
+                  </>
+                )}
               </p>
             </div>
           </div>
 
           {/* Local Timezone + Streak Status Card */}
           <div className="bg-black/35 backdrop-blur-xl border border-white/15 rounded-2xl p-5 text-xs text-slate-300 shrink-0 space-y-3 min-w-[240px]">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5 text-purple-200 font-bold">
                 <Globe2 className="w-4 h-4 text-[#FF6D00]" />
-                <span>Your Timezone</span>
+                <span>{lang === "he" ? "אזור הזמן שלך" : "Your Timezone"}</span>
               </span>
               <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-semibold text-[11px]">
-                Auto-Synced
+                {lang === "he" ? "מסונכרן אוטומטית" : "Auto-Synced"}
               </span>
             </div>
-            <p className="text-base font-extrabold text-white">
+            <p dir="ltr" className="text-base font-extrabold text-white">
               {localTimezone}
             </p>
             <div className="pt-2 border-t border-white/10 flex items-center gap-2 text-orange-300 font-semibold">
-              <Flame className="w-4 h-4 text-[#FF6D00] fill-[#FF6D00]" />
-              <span>Book 1 more call to hit a 13-day streak!</span>
+              <Flame className="w-4 h-4 text-[#FF6D00] fill-[#FF6D00] shrink-0" />
+              <span>
+                {lang === "he"
+                  ? "קבע עוד שיחה אחת כדי להגיע לרצף של 13 ימים!"
+                  : "Book 1 more call to hit a 13-day streak!"}
+              </span>
             </div>
           </div>
         </div>
@@ -202,31 +270,28 @@ export default function TeenExplorePage() {
       {/* Hobby Filter Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-2 flex items-center gap-1.5">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 me-2 flex items-center gap-1.5">
             <Compass className="w-4 h-4 text-purple-400" />
-            <span>Filter by Shared Hobby:</span>
+            <span>
+              {lang === "he"
+                ? "סינון לפי תחביב משותף:"
+                : "Filter by Shared Hobby:"}
+            </span>
           </span>
-          {[
-            "All",
-            "Football",
-            "Classic Movies & Marvel",
-            "Music & Vinyl",
-            "Baking & Cooking",
-            "Board Games & Chess",
-          ].map((hobby) => {
-            const active = selectedHobbyFilter === hobby;
+          {HOBBY_FILTERS.map((hobby) => {
+            const active = selectedHobbyFilter === hobby.id;
             return (
               <button
-                key={hobby}
+                key={hobby.id}
                 type="button"
-                onClick={() => setSelectedHobbyFilter(hobby)}
+                onClick={() => setSelectedHobbyFilter(hobby.id)}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
                   active
                     ? "bg-[#4A148C] text-white border-purple-400 shadow-[0_0_16px_rgba(74,20,140,0.6)]"
                     : "bg-white/[0.03] text-slate-300 border-white/10 hover:border-white/25 hover:bg-white/[0.06]"
                 }`}
               >
-                {hobby}
+                {lang === "he" ? hobby.he : hobby.en}
               </button>
             );
           })}

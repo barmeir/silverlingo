@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
+import { useLanguage } from "@/context/LanguageContext";
 import {
   Sparkles,
   MapPin,
@@ -10,6 +11,7 @@ import {
   Star,
   MessageCircleHeart,
   ArrowRight,
+  ArrowLeft,
 } from "lucide-react";
 
 export interface HostSlot {
@@ -20,15 +22,20 @@ export interface HostSlot {
 export interface HostProfile {
   id: string;
   fullName: string;
+  fullNameHe?: string;
   age: number;
   country: string;
+  countryHe?: string;
   city: string;
+  cityHe?: string;
   formerRole: string;
+  formerRoleHe?: string;
   rating: string;
   callsCompleted: number;
   bio: string;
+  bioHe?: string;
   avatarUrl: string;
-  hobbies: { name: string; icon: string }[];
+  hobbies: { name: string; nameHe?: string; icon: string }[];
   sharedHobbies: string[];
   availableSlots: HostSlot[];
 }
@@ -48,27 +55,30 @@ interface HostCardProps {
   }) => void;
 }
 
-/**
- * Formats an ISO UTC slot into the Teen Learner's local browser timezone
- */
-function formatSlotInLocalTimezone(utcISO: string): {
+function formatSlotInLocalTimezone(
+  utcISO: string,
+  lang: "en" | "he"
+): {
   dayLabel: string;
   timeLabel: string;
   isStartingSoon: boolean;
 } {
   const date = new Date(utcISO);
   const diffMins = (date.getTime() - Date.now()) / 60000;
+  const locale = lang === "he" ? "he-IL" : undefined;
 
   const dayLabel =
     diffMins <= 30 && diffMins >= -5
-      ? "Today • Live Demo"
-      : new Intl.DateTimeFormat(undefined, {
+      ? lang === "he"
+        ? "היום • הדגמה חיה"
+        : "Today • Live Demo"
+      : new Intl.DateTimeFormat(locale, {
           weekday: "short",
           month: "short",
           day: "numeric",
         }).format(date);
 
-  const timeLabel = new Intl.DateTimeFormat(undefined, {
+  const timeLabel = new Intl.DateTimeFormat(locale, {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
@@ -82,14 +92,33 @@ export default function HostCard({
   learnerHobbies,
   onBooked,
 }: HostCardProps) {
+  const { lang, isRTL } = useLanguage();
+  const DirectionalArrow = isRTL ? ArrowLeft : ArrowRight;
+
   const [selectedSlot, setSelectedSlot] = useState<HostSlot | null>(
     host.availableSlots[0] || null
   );
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const primarySharedHobby =
-    host.sharedHobbies[0] || host.hobbies[0]?.name || "Stories";
+  const sharedHobbyObj =
+    host.hobbies.find((h) => host.sharedHobbies.includes(h.name)) ||
+    host.hobbies[0];
+
+  const displayName =
+    lang === "he" && host.fullNameHe ? host.fullNameHe : host.fullName;
+  const firstName = displayName.split(" ")[0];
+  const displayRole =
+    lang === "he" && host.formerRoleHe ? host.formerRoleHe : host.formerRole;
+  const displayCity =
+    lang === "he" && host.cityHe ? host.cityHe : host.city;
+  const displayCountry =
+    lang === "he" && host.countryHe ? host.countryHe : host.country;
+  const displayBio = lang === "he" && host.bioHe ? host.bioHe : host.bio;
+  const sharedHobbyLabel =
+    lang === "he" && sharedHobbyObj?.nameHe
+      ? sharedHobbyObj.nameHe
+      : sharedHobbyObj?.name || "Stories";
 
   const handleBookSlot = async () => {
     if (!selectedSlot) return;
@@ -143,9 +172,11 @@ export default function HostCard({
         {/* Top Row: AI Hobby Match Tag + Rating */}
         <div className="flex items-center justify-between gap-2 mb-5">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-[#4A148C] to-purple-800 border border-purple-400/40 text-purple-100 text-xs font-bold shadow-sm">
-            <Sparkles className="w-3.5 h-3.5 text-[#FF6D00]" />
+            <Sparkles className="w-3.5 h-3.5 text-[#FF6D00] shrink-0" />
             <span>
-              {host.fullName.split(" ")[0]} also likes {primarySharedHobby}!
+              {lang === "he"
+                ? `גם ${firstName} אוהב/ת ${sharedHobbyLabel}!`
+                : `${firstName} also likes ${sharedHobbyLabel}!`}
             </span>
           </div>
 
@@ -160,7 +191,7 @@ export default function HostCard({
           <div className="relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border-2 border-purple-400/40 shadow-lg bg-[#4A148C]">
             <img
               src={host.avatarUrl}
-              alt={host.fullName}
+              alt={displayName}
               className="w-full h-full object-cover"
             />
             <span
@@ -170,16 +201,16 @@ export default function HostCard({
           </div>
           <div className="min-w-0">
             <h2 className="text-lg font-extrabold text-white truncate">
-              {host.fullName},{" "}
+              {displayName},{" "}
               <span className="text-purple-300 font-semibold">{host.age}</span>
             </h2>
             <p className="text-xs text-purple-200/90 font-medium mt-0.5">
-              {host.formerRole}
+              {displayRole}
             </p>
             <p className="text-xs text-slate-400 flex items-center gap-1 mt-1">
               <MapPin className="w-3.5 h-3.5 text-purple-400 shrink-0" />
               <span className="truncate">
-                {host.city}, {host.country}
+                {displayCity}, {displayCountry}
               </span>
             </p>
           </div>
@@ -187,13 +218,15 @@ export default function HostCard({
 
         {/* Bio */}
         <p className="text-[14px] text-slate-300 mt-4 leading-relaxed line-clamp-3">
-          “{host.bio}”
+          “{displayBio}”
         </p>
 
         {/* Hobby Pills */}
         <div className="flex flex-wrap gap-1.5 mt-4">
           {host.hobbies.map((hobby) => {
             const isShared = host.sharedHobbies.includes(hobby.name);
+            const label =
+              lang === "he" && hobby.nameHe ? hobby.nameHe : hobby.name;
             return (
               <span
                 key={hobby.name}
@@ -204,7 +237,7 @@ export default function HostCard({
                 }`}
               >
                 <span>{hobby.icon}</span>
-                <span>{hobby.name}</span>
+                <span>{label}</span>
               </span>
             );
           })}
@@ -215,17 +248,23 @@ export default function HostCard({
           <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
             <span className="flex items-center gap-1.5 font-semibold text-slate-200">
               <Clock className="w-3.5 h-3.5 text-[#FF6D00]" />
-              <span>Pick a 30-min slot (Your Local Time)</span>
+              <span>
+                {lang === "he"
+                  ? "בחרו שעה ל-30 דק׳ (לפי השעון שלכם)"
+                  : "Pick a 30-min slot (Your Local Time)"}
+              </span>
             </span>
             <span className="text-[11px] text-purple-300 font-medium">
-              {host.callsCompleted} chats hosted
+              {lang === "he"
+                ? `${host.callsCompleted} שיחות`
+                : `${host.callsCompleted} chats hosted`}
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">
             {host.availableSlots.map((slot) => {
               const { dayLabel, timeLabel, isStartingSoon } =
-                formatSlotInLocalTimezone(slot.utcStartISO);
+                formatSlotInLocalTimezone(slot.utcStartISO, lang);
               const isSelected = selectedSlot?.id === slot.id;
 
               return (
@@ -233,7 +272,7 @@ export default function HostCard({
                   key={slot.id}
                   type="button"
                   onClick={() => setSelectedSlot(slot)}
-                  className={`px-3.5 py-2.5 rounded-xl text-left text-xs border transition-all flex items-center justify-between ${
+                  className={`px-3.5 py-2.5 rounded-xl text-start text-xs border transition-all flex items-center justify-between ${
                     isSelected
                       ? "bg-[#4A148C] border-purple-300 text-white font-semibold shadow-[0_0_20px_rgba(74,20,140,0.6)]"
                       : "bg-white/[0.03] border-white/10 text-slate-300 hover:border-white/25 hover:bg-white/[0.06]"
@@ -247,7 +286,10 @@ export default function HostCard({
                     >
                       {dayLabel}
                     </div>
-                    <div className="text-sm font-extrabold text-white mt-0.5">
+                    <div
+                      dir="ltr"
+                      className="text-sm font-extrabold text-white mt-0.5"
+                    >
                       {timeLabel}
                     </div>
                   </div>
@@ -273,12 +315,20 @@ export default function HostCard({
         className="mt-6 w-full py-3.5 px-5 rounded-2xl bg-[#FF6D00] hover:bg-[#F56200] active:scale-[0.99] text-white font-extrabold text-sm shadow-[0_10px_25px_-5px_rgba(255,109,0,0.55)] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {booking ? (
-          <span>Creating Google Meet & AI Icebreaker...</span>
+          <span>
+            {lang === "he"
+              ? "יוצר קישור Google Meet ושאלת פתיחה ב-AI..."
+              : "Creating Google Meet & AI Icebreaker..."}
+          </span>
         ) : (
           <>
-            <MessageCircleHeart className="w-4 h-4" />
-            <span>Book 30-Min Call with {host.fullName.split(" ")[0]}</span>
-            <ArrowRight className="w-4 h-4" />
+            <MessageCircleHeart className="w-4 h-4 shrink-0" />
+            <span>
+              {lang === "he"
+                ? `קביעת שיחת 30 דק׳ עם ${firstName}`
+                : `Book 30-Min Call with ${firstName}`}
+            </span>
+            <DirectionalArrow className="w-4 h-4 shrink-0" />
           </>
         )}
       </button>

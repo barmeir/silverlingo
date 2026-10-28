@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans, Heebo } from "next/font/google";
+import { LanguageProvider } from "@/context/LanguageContext";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -8,8 +9,14 @@ const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
 });
 
+const heebo = Heebo({
+  subsets: ["hebrew", "latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-heebo",
+});
+
 export const metadata: Metadata = {
-  title: "SilverLingo — Intergenerational Language Exchange",
+  title: "SilverLingo — Intergenerational Language Exchange | חילופי שפה בין-דוריים",
   description:
     "Connect over shared hobbies via 30-minute 1-on-1 video calls between elderly native English speakers and teen learners.",
 };
@@ -20,9 +27,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={jakarta.variable}>
+    <html lang="en" className={`${jakarta.variable} ${heebo.variable}`}>
       <body className="font-sans antialiased selection:bg-[#FF6D00] selection:text-white">
-        {children}
+        <LanguageProvider>{children}</LanguageProvider>
       </body>
     </html>
   );
