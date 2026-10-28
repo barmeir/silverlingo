@@ -48,8 +48,7 @@ export default function HomePage() {
       roomDesc: "Preview the AI Icebreaker & 1-tap Google Meet launch",
       footerTz:
         "All schedules stored in UTC & displayed in your local browser timezone",
-      footerTech:
-        "Built with Next.js, Tailwind CSS, Supabase, Google Calendar API & OpenAI",
+      footerTech: "Built by Bar Meir",
     },
     he: {
       badge: "חילופי שפה בין-דוריים",
@@ -76,8 +75,7 @@ export default function HomePage() {
       roomDesc: "צפו בשאלת שבירת הקרח של ה-AI והצטרפו לשיחת הווידאו בלחיצה אחת",
       footerTz:
         "כל השעות נשמרות ב-UTC ומוצגות אוטומטית לפי השעון המקומי בדפדפן שלכם",
-      footerTech:
-        "נבנה באמצעות Next.js, Tailwind CSS, Supabase, Google Calendar API ו-OpenAI",
+      footerTech: "נבנה על ידי בר מאיר",
     },
   }[lang];
 
