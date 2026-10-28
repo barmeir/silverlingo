@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
+import { withBasePath } from "@/lib/assets";
 import {
   Sparkles,
   Calendar,
@@ -143,22 +144,22 @@ export default function HomePage() {
             <div className="flex flex-wrap items-center gap-5 pt-1">
               <div className="flex items-center -space-x-3 rtl:space-x-reverse">
                 <img
-                  src="/avatars/arthur.png"
+                  src={withBasePath("/avatars/arthur.png")}
                   alt="Arthur, 74"
                   className="w-14 h-14 rounded-2xl object-cover border-2 border-white shadow-lg"
                 />
                 <img
-                  src="/avatars/eleanor.png"
+                  src={withBasePath("/avatars/eleanor.png")}
                   alt="Eleanor, 69"
                   className="w-14 h-14 rounded-2xl object-cover border-2 border-white shadow-lg"
                 />
                 <img
-                  src="/avatars/walter.png"
+                  src={withBasePath("/avatars/walter.png")}
                   alt="Walter, 78"
                   className="w-14 h-14 rounded-2xl object-cover border-2 border-white shadow-lg"
                 />
                 <img
-                  src="/avatars/mateo.png"
+                  src={withBasePath("/avatars/mateo.png")}
                   alt="Mateo, 16"
                   className="w-14 h-14 rounded-2xl object-cover border-2 border-[#FF6D00] shadow-lg"
                 />
@@ -204,7 +205,7 @@ export default function HomePage() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <img
-                      src="/avatars/arthur.png"
+                      src={withBasePath("/avatars/arthur.png")}
                       alt="Arthur"
                       className="w-12 h-12 rounded-xl object-cover border-2 border-[#4A148C]"
                     />
@@ -235,7 +236,7 @@ export default function HomePage() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <img
-                      src="/avatars/mateo.png"
+                      src={withBasePath("/avatars/mateo.png")}
                       alt="Mateo"
                       className="w-12 h-12 rounded-xl object-cover border-2 border-[#FF6D00]"
                     />

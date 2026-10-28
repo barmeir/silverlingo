@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import HostCard, { HostProfile } from "@/components/teen/HostCard";
 import { useLanguage } from "@/context/LanguageContext";
+import { withBasePath } from "@/lib/assets";
 import { Globe2, Sparkles, Flame, Compass } from "lucide-react";
 
 const DEMO_HOSTS: HostProfile[] = [
@@ -169,7 +170,7 @@ export default function TeenExplorePage() {
       meet: bookingData.googleMeetLink,
       icebreaker: bookingData.aiIcebreaker,
     });
-    router.push(`/room/${bookingData.meetingId}?${query.toString()}`);
+    router.push(`/room/demo-session?${query.toString()}`);
   };
 
   return (
@@ -180,7 +181,7 @@ export default function TeenExplorePage() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-6 max-w-2xl">
             <div className="w-20 h-20 rounded-3xl overflow-hidden border-2 border-[#FF6D00] shadow-xl shrink-0 bg-purple-950">
               <img
-                src="/avatars/mateo.png"
+                src={withBasePath("/avatars/mateo.png")}
                 alt="Mateo"
                 className="w-full h-full object-cover"
               />

@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
+import { withBasePath } from "@/lib/assets";
 import {
   Sparkles,
   MapPin,
@@ -126,32 +127,49 @@ export default function HostCard({
     setError(null);
 
     try {
-      const response = await fetch("/api/meetings/book", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          hostId: host.id,
-          hostName: host.fullName,
-          hostHobbies: host.hobbies.map((h) => h.name),
-          learnerName,
-          learnerHobbies,
-          scheduledStartUTC: selectedSlot.utcStartISO,
-        }),
-      });
+      let meetingId = "demo-session";
+      let scheduledStart = selectedSlot.utcStartISO;
+      let googleMeetLink = "https://meet.google.com/slv-demo-room";
+      const sharedHobby =
+        host.sharedHobbies[0] || host.hobbies[0]?.name || "favorite hobbies";
+      let aiIcebreaker = `${learnerName}, ask ${
+        host.fullName.split(" ")[0]
+      } what first sparked their love for ${sharedHobby}!`;
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Could not book this slot.");
+      try {
+        const response = await fetch(withBasePath("/api/meetings/book"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hostId: host.id,
+            hostName: host.fullName,
+            hostHobbies: host.hobbies.map((h) => h.name),
+            learnerName,
+            learnerHobbies,
+            scheduledStartUTC: selectedSlot.utcStartISO,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          meetingId = data.meeting.id;
+          scheduledStart = data.meeting.scheduled_start;
+          googleMeetLink = data.meeting.google_meet_link;
+          aiIcebreaker = data.meeting.ai_icebreaker;
+        }
+      } catch {
+        // Static GitHub Pages fallback: simulate brief booking latency
+        await new Promise((r) => setTimeout(r, 450));
       }
 
       onBooked({
-        meetingId: data.meeting.id,
+        meetingId,
         hostName: host.fullName,
         hostAvatar: host.avatarUrl,
         learnerName,
-        scheduledStartUTC: data.meeting.scheduled_start,
-        googleMeetLink: data.meeting.google_meet_link,
-        aiIcebreaker: data.meeting.ai_icebreaker,
+        scheduledStartUTC: scheduledStart,
+        googleMeetLink,
+        aiIcebreaker,
       });
     } catch (err: any) {
       setError(err.message);
@@ -190,7 +208,7 @@ export default function HostCard({
         <div className="flex items-center gap-4">
           <div className="relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border-2 border-purple-400/40 shadow-lg bg-[#4A148C]">
             <img
-              src={host.avatarUrl}
+              src={withBasePath(host.avatarUrl)}
               alt={displayName}
               className="w-full h-full object-cover"
             />

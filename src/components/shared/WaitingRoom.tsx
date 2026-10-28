@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { formatUTCToLocalDisplay } from "@/lib/timezone";
 import { useLanguage } from "@/context/LanguageContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
+import { withBasePath } from "@/lib/assets";
 import {
   Video,
   Sparkles,
@@ -177,14 +178,14 @@ export default function WaitingRoom({
             <div className="flex items-center -space-x-4 rtl:space-x-reverse shrink-0">
               <div className="w-20 h-20 rounded-3xl overflow-hidden border-4 border-[#4A148C] shadow-lg bg-purple-900">
                 <img
-                  src={hostAvatar}
+                  src={withBasePath(hostAvatar)}
                   alt={hostName}
                   className="w-full h-full object-cover"
                 />
               </div>
               <div className="w-20 h-20 rounded-3xl overflow-hidden border-4 border-[#FF6D00] shadow-lg bg-orange-600">
                 <img
-                  src={learnerAvatar}
+                  src={withBasePath(learnerAvatar)}
                   alt={learnerName}
                   className="w-full h-full object-cover"
                 />

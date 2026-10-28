@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Calendar, Video, Home } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
+import { withBasePath } from "@/lib/assets";
 
 /**
  * Elderly Interface (Hosts) Layout:
@@ -45,7 +46,7 @@ export default function ElderlyLayout({
             className="min-h-[60px] px-4 rounded-2xl flex items-center gap-4 focus:outline-none focus:ring-4 focus:ring-[#FF6D00]"
           >
             <img
-              src="/avatars/arthur.png"
+              src={withBasePath("/avatars/arthur.png")}
               alt="Arthur Pendelton"
               className="w-14 h-14 rounded-2xl object-cover border-2 border-[#FF6D00] shadow-md"
             />
