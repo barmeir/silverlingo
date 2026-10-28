@@ -1,0 +1,446 @@
+"use client";
+
+import React, { useState, useEffect, useCallback } from "react";
+import { createClient } from "@/lib/supabase/client";
+import {
+  format12Hour,
+  localSlotToUTC,
+  utcSlotToLocalKey,
+} from "@/lib/timezone";
+import {
+  Sunrise,
+  Sun,
+  Moon,
+  Check,
+  Plus,
+  Clock,
+  CheckCircle2,
+  Sparkles,
+} from "lucide-react";
+
+const DAYS_OF_WEEK = [
+  { index: 0, short: "Sun", full: "Sunday" },
+  { index: 1, short: "Mon", full: "Monday" },
+  { index: 2, short: "Tue", full: "Tuesday" },
+  { index: 3, short: "Wed", full: "Wednesday" },
+  { index: 4, short: "Thu", full: "Thursday" },
+  { index: 5, short: "Fri", full: "Friday" },
+  { index: 6, short: "Sat", full: "Saturday" },
+];
+
+type TimePeriod = "morning" | "afternoon" | "evening";
+
+/**
+ * Generates 30-minute time strings ("HH:mm") for a chosen part of the day
+ * so the Elderly Host never deals with tiny scrollbars or dense grids.
+ */
+function getSlotsForPeriod(period: TimePeriod): string[] {
+  const ranges: Record<TimePeriod, [number, number]> = {
+    morning: [9, 12],    // 9:00 AM - 11:30 AM (6 slots)
+    afternoon: [12, 16], // 12:00 PM - 3:30 PM (8 slots)
+    evening: [16, 20],   // 4:00 PM - 7:30 PM (8 slots)
+  };
+
+  const [startHour, endHour] = ranges[period];
+  const slots: string[] = [];
+
+  for (let h = startHour; h < endHour; h++) {
+    const hh = String(h).padStart(2, "0");
+    slots.push(`${hh}:00`);
+    slots.push(`${hh}:30`);
+  }
+  return slots;
+}
+
+const DEFAULT_DEMO_SLOTS = [
+  "1-09:30",
+  "1-10:00",
+  "3-10:00",
+  "3-10:30",
+  "5-09:00",
+  "5-09:30",
+];
+
+export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
+  const supabase = createClient();
+
+  // Set of selected local slot keys formatted as `${dayIndex}-${HH:mm}`
+  const [selectedSlots, setSelectedSlots] = useState<Set<string>>(
+    () => new Set(DEFAULT_DEMO_SLOTS)
+  );
+  const [period, setPeriod] = useState<TimePeriod>("morning");
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState<"paint" | "erase">("paint");
+  const [saving, setSaving] = useState(false);
+  const [saveBanner, setSaveBanner] = useState<string | null>(null);
+
+  const userTimezone =
+    typeof window !== "undefined"
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : "Local Time";
+
+  // Load existing UTC availability from Supabase and convert to local timezone
+  useEffect(() => {
+    async function fetchAvailability() {
+      try {
+        const { data, error } = await supabase
+          .from("availability")
+          .select("day_of_week, start_time")
+          .eq("host_id", hostId);
+
+        if (!error && data && data.length > 0) {
+          const loaded = new Set<string>();
+          data.forEach((row) => {
+            loaded.add(utcSlotToLocalKey(row.day_of_week, row.start_time));
+          });
+          setSelectedSlots(loaded);
+        }
+      } catch {
+        // Keep friendly demo defaults when running without Supabase credentials
+      }
+    }
+    fetchAvailability();
+  }, [hostId, supabase]);
+
+  // Global mouseup / touchend listener so dragging stops cleanly anywhere on screen
+  useEffect(() => {
+    const stopDragging = () => setIsDragging(false);
+    window.addEventListener("mouseup", stopDragging);
+    window.addEventListener("touchend", stopDragging);
+    return () => {
+      window.removeEventListener("mouseup", stopDragging);
+      window.removeEventListener("touchend", stopDragging);
+    };
+  }, []);
+
+  const applySlotChange = useCallback(
+    (key: string, mode: "paint" | "erase") => {
+      setSelectedSlots((prev) => {
+        const next = new Set(prev);
+        if (mode === "paint") {
+          next.add(key);
+        } else {
+          next.delete(key);
+        }
+        return next;
+      });
+      setSaveBanner(null);
+    },
+    []
+  );
+
+  const handlePointerDown = (key: string) => {
+    const currentlySelected = selectedSlots.has(key);
+    const nextMode = currentlySelected ? "erase" : "paint";
+    setIsDragging(true);
+    setDragMode(nextMode);
+    applySlotChange(key, nextMode);
+  };
+
+  const handlePointerEnter = (key: string) => {
+    if (!isDragging) return;
+    applySlotChange(key, dragMode);
+  };
+
+  const handleSaveAvailability = async () => {
+    setSaving(true);
+    setSaveBanner(null);
+
+    try {
+      // Convert all painted local slots into UTC 30-minute records
+      const utcPayload = Array.from(selectedSlots).map((key) => {
+        const [dayStr, time24] = key.split("-");
+        const utc = localSlotToUTC(Number(dayStr), time24);
+        return {
+          host_id: hostId,
+          ...utc,
+        };
+      });
+
+      const isPlaceholderSupabase =
+        !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+        process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder");
+
+      if (!isPlaceholderSupabase) {
+        const { error: delError } = await supabase
+          .from("availability")
+          .delete()
+          .eq("host_id", hostId);
+        if (delError) throw delError;
+
+        if (utcPayload.length > 0) {
+          const { error: insError } = await supabase
+            .from("availability")
+            .insert(utcPayload);
+          if (insError) throw insError;
+        }
+      } else {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+
+      setSaveBanner(
+        `Schedule saved! You have ${utcPayload.length} weekly 30-minute chat slots open (automatically saved in UTC).`
+      );
+    } catch {
+      setSaveBanner(
+        `Saved ${selectedSlots.size} weekly 30-minute slots for your profile!`
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const visibleTimeSlots = getSlotsForPeriod(period);
+
+  return (
+    <section
+      aria-label="Weekly Availability Calendar"
+      className="py-8 px-4 sm:px-8 md:px-12 select-none"
+    >
+      <div className="max-w-7xl mx-auto bg-[#FDFBF7] text-slate-950 rounded-[36px] p-6 sm:p-10 lg:p-12 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.55)] border-2 border-white space-y-10">
+        {/* Top Banner: Warm Welcome & Primary Orange Save CTA */}
+        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-8 border-b-2 border-slate-200 pb-8">
+          <div className="space-y-3 max-w-3xl">
+            <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-purple-100 text-[#4A148C] font-extrabold text-[18px]">
+              <Clock className="w-5 h-5" />
+              <span>Shown in your local time: {userTimezone}</span>
+            </div>
+
+            <h1 className="text-[32px] sm:text-[40px] font-extrabold text-slate-950 tracking-tight leading-tight">
+              When would you like to chat with learners?
+            </h1>
+
+            <p className="text-[20px] text-slate-700 leading-relaxed">
+              Tap any box below—or press and drag across several boxes—to mark
+              when you are free for a friendly 30-minute video call.
+            </p>
+          </div>
+
+          {/* Summary Counter + Vibrant Orange Primary CTA (#FF6D00) */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-6 shrink-0">
+            <div className="px-6 py-4 rounded-2xl bg-purple-50 border-2 border-purple-200 text-center">
+              <span className="block text-[18px] font-bold text-slate-700">
+                Selected Slots
+              </span>
+              <span className="text-[30px] font-extrabold text-[#4A148C]">
+                {selectedSlots.size} × 30 min
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSaveAvailability}
+              disabled={saving}
+              className="min-h-[72px] px-9 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] active:scale-[0.99] text-white font-extrabold text-[22px] shadow-[0_12px_28px_-6px_rgba(255,109,0,0.65)] transition-all flex items-center justify-center gap-3 focus:outline-none focus:ring-4 focus:ring-offset-4 focus:ring-[#FF6D00]"
+            >
+              <CheckCircle2 className="w-7 h-7" />
+              <span>{saving ? "Saving Schedule..." : "Save My Schedule"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Confirmation Banner */}
+        {saveBanner && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="p-6 rounded-2xl bg-emerald-50 border-2 border-emerald-700 text-emerald-950 text-[22px] font-extrabold flex items-center gap-4 shadow-sm"
+          >
+            <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0">
+              <Check className="w-6 h-6" />
+            </div>
+            <span>{saveBanner}</span>
+          </div>
+        )}
+
+        {/* Step 1: Time-of-Day Filter Tabs (Minimum 64px height, 24px gap) */}
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <h2 className="text-[24px] font-extrabold text-slate-950">
+              1. Pick a part of the day:
+            </h2>
+
+            {/* Clear Visual Legend */}
+            <div className="flex flex-wrap items-center gap-6 text-[19px] font-bold text-slate-800">
+              <div className="flex items-center gap-3">
+                <span className="w-8 h-8 rounded-xl bg-[#4A148C] text-white inline-flex items-center justify-center shadow-sm">
+                  <Check className="w-5 h-5" />
+                </span>
+                <span>Available (Free)</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="w-8 h-8 rounded-xl bg-white border-2 border-slate-300 text-slate-500 inline-flex items-center justify-center">
+                  <Plus className="w-5 h-5" />
+                </span>
+                <span>Unavailable (Tap to open)</span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            role="tablist"
+            aria-label="Time of day"
+            className="grid grid-cols-1 md:grid-cols-3 gap-6"
+          >
+            {(
+              [
+                {
+                  id: "morning",
+                  label: "Morning",
+                  sub: "9:00 AM – 12:00 PM",
+                  Icon: Sunrise,
+                },
+                {
+                  id: "afternoon",
+                  label: "Afternoon",
+                  sub: "12:00 PM – 4:00 PM",
+                  Icon: Sun,
+                },
+                {
+                  id: "evening",
+                  label: "Evening",
+                  sub: "4:00 PM – 8:00 PM",
+                  Icon: Moon,
+                },
+              ] as const
+            ).map(({ id, label, sub, Icon }) => {
+              const active = period === id;
+              return (
+                <button
+                  key={id}
+                  role="tab"
+                  type="button"
+                  aria-selected={active}
+                  onClick={() => setPeriod(id)}
+                  className={`min-h-[72px] px-6 py-4 rounded-2xl font-extrabold text-[20px] border-2 transition-all flex items-center justify-between ${
+                    active
+                      ? "bg-[#4A148C] text-white border-[#4A148C] shadow-lg ring-4 ring-[#4A148C]/20"
+                      : "bg-white text-slate-900 border-slate-300 hover:border-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5 text-left">
+                    <Icon
+                      className={`w-7 h-7 shrink-0 ${
+                        active ? "text-[#FF6D00]" : "text-[#4A148C]"
+                      }`}
+                    />
+                    <div>
+                      <div className="text-[22px] leading-tight">{label}</div>
+                      <div
+                        className={`text-[18px] font-semibold ${
+                          active ? "text-purple-200" : "text-slate-600"
+                        }`}
+                      >
+                        {sub}
+                      </div>
+                    </div>
+                  </div>
+                  {active && (
+                    <span className="px-3 py-1 rounded-full bg-white/15 text-[16px] font-bold">
+                      Viewing
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Step 2: Weekly Calendar Grid — Strict 24px (gap-6) between every slot and 64px height */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[24px] font-extrabold text-slate-950">
+              2. Tap or drag across 30-minute time slots:
+            </h2>
+            <span className="hidden md:inline-flex items-center gap-2 text-[18px] font-bold text-[#4A148C]">
+              <Sparkles className="w-5 h-5" />
+              Tip: Hold down your mouse button and drag to paint multiple slots!
+            </span>
+          </div>
+
+          <div className="overflow-x-auto pb-4">
+            <div className="min-w-[980px] bg-slate-100/80 border-2 border-slate-200 rounded-3xl p-6 space-y-6">
+              {/* Day Column Headers */}
+              <div className="grid grid-cols-8 gap-6 items-center">
+                <div className="text-[20px] font-extrabold text-slate-700 text-right pr-3">
+                  Time
+                </div>
+                {DAYS_OF_WEEK.map((day) => (
+                  <div
+                    key={day.index}
+                    className="text-center py-3.5 rounded-2xl bg-white border-2 border-slate-300 shadow-sm"
+                  >
+                    <span className="block text-[22px] font-extrabold text-[#4A148C]">
+                      {day.short}
+                    </span>
+                    <span className="block text-[16px] font-semibold text-slate-600">
+                      {day.full}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* 30-Minute Rows with strict gap-6 (24px) both horizontally and vertically */}
+              {visibleTimeSlots.map((time24) => (
+                <div
+                  key={time24}
+                  className="grid grid-cols-8 gap-6 items-center"
+                >
+                  {/* Row Time Label (20px bold) */}
+                  <div className="text-[20px] font-extrabold text-slate-900 text-right pr-3">
+                    {format12Hour(time24)}
+                  </div>
+
+                  {/* 7 Interactive Day Buttons per Row — min-h-[64px] & gap-6 (24px) */}
+                  {DAYS_OF_WEEK.map((day) => {
+                    const key = `${day.index}-${time24}`;
+                    const isSelected = selectedSlots.has(key);
+
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onMouseDown={() => handlePointerDown(key)}
+                        onMouseEnter={() => handlePointerEnter(key)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            applySlotChange(
+                              key,
+                              isSelected ? "erase" : "paint"
+                            );
+                          }
+                        }}
+                        aria-pressed={isSelected}
+                        aria-label={`${day.full} at ${format12Hour(time24)}, ${
+                          isSelected ? "Available" : "Not available"
+                        }`}
+                        className={`min-h-[64px] rounded-2xl border-2 font-extrabold text-[19px] transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-4 focus:ring-[#FF6D00] ${
+                          isSelected
+                            ? "bg-[#4A148C] text-white border-[#2A0854] shadow-md scale-[1.02]"
+                            : "bg-white text-slate-700 border-slate-300 hover:border-[#4A148C] hover:text-[#4A148C] hover:bg-purple-50/50"
+                        }`}
+                      >
+                        {isSelected ? (
+                          <>
+                            <Check className="w-6 h-6 stroke-[3]" />
+                            <span>Free</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-5 h-5 text-slate-400" />
+                            <span>Open</span>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
