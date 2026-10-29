@@ -104,6 +104,12 @@ export default function HomePage() {
         <div className="flex items-center gap-6">
           <LanguageSwitcher />
           <Link
+            href="/onboarding"
+            className="min-h-[60px] px-6 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] text-white font-extrabold text-[18px] flex items-center gap-2 shadow-lg transition-all"
+          >
+            <span>{lang === "he" ? "יצירת פרופיל" : "Create Profile"}</span>
+          </Link>
+          <Link
             href="/login"
             className="min-h-[60px] px-6 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white font-bold text-[18px] flex items-center gap-2 transition-all"
           >

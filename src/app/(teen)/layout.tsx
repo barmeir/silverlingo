@@ -2,37 +2,34 @@
 
 import React from "react";
 import Link from "next/link";
-import { Flame, Trophy, Sparkles, Zap, Calendar, Home } from "lucide-react";
+import { Flame, Trophy, Sparkles, Zap, Calendar, Home, UserPlus } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useUserProfile } from "@/context/UserProfileContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 
-/**
- * Teen Interface (Learners):
- * - Default to Dark Mode (`#0B0714` deep cosmic slate with `#4A148C` accents)
- * - Standard typography (14px-16px)
- * - Gamified elements (progress bars, streaks, XP badges)
- * - Persistent EN / עברית Switcher in top bar
- */
 export default function TeenLearnerLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const { lang } = useLanguage();
+  const { profile } = useUserProfile();
 
   const t = {
     en: {
-      rolePill: "Teen Learner",
+      rolePill: profile ? profile.fullName : "Teen Learner",
       home: "Home",
       hostView: "Host View",
+      editProfile: profile ? "Edit Profile" : "Create Profile",
       weeklyQuest: "Weekly Fluency Quest",
       callsCount: "2 / 3 calls",
       streak: "12 Day Streak",
     },
     he: {
-      rolePill: "תלמיד/ה",
+      rolePill: profile ? profile.fullName : "תלמיד/ה",
       home: "דף הבית",
       hostView: "תצוגת מארח",
+      editProfile: profile ? "עריכת פרופיל" : "יצירת פרופיל",
       weeklyQuest: "יעד שיחות שבועי",
       callsCount: "2 / 3 שיחות",
       streak: "רצף של 12 ימים",
@@ -41,14 +38,11 @@ export default function TeenLearnerLayout({
 
   return (
     <div className="dark min-h-screen bg-[#0B0714] text-slate-100 text-[15px] leading-normal font-sans relative overflow-x-hidden">
-      {/* Ambient Background Glows */}
       <div className="pointer-events-none fixed top-0 left-1/4 w-[500px] h-[500px] rounded-full bg-[#4A148C]/25 blur-[140px]" />
       <div className="pointer-events-none fixed bottom-0 right-1/4 w-[420px] h-[420px] rounded-full bg-[#FF6D00]/10 blur-[140px]" />
 
-      {/* Sticky Glassmorphism Gamified Header */}
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-[#130A24]/85 border-b border-purple-500/20 px-6 py-3.5">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          {/* Brand & Nav */}
           <div className="flex items-center gap-6">
             <Link
               href="/"
@@ -72,6 +66,13 @@ export default function TeenLearnerLayout({
                 <span>{t.home}</span>
               </Link>
               <Link
+                href="/onboarding"
+                className="px-3 py-1.5 rounded-lg text-purple-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-1.5"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>{t.editProfile}</span>
+              </Link>
+              <Link
                 href="/availability"
                 className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-1.5"
               >
@@ -81,11 +82,9 @@ export default function TeenLearnerLayout({
             </nav>
           </div>
 
-          {/* Gamified HUD + Language Switcher */}
           <div className="flex items-center gap-3 sm:gap-4">
             <LanguageSwitcher />
 
-            {/* Weekly Speaking Quest Progress Bar */}
             <div className="hidden sm:flex items-center gap-3 bg-white/[0.04] border border-white/10 px-3.5 py-1.5 rounded-xl">
               <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-400/30 flex items-center justify-center">
                 <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
@@ -103,13 +102,11 @@ export default function TeenLearnerLayout({
               </div>
             </div>
 
-            {/* XP Pill */}
             <div className="hidden lg:flex items-center gap-1.5 bg-purple-950/60 border border-purple-500/30 px-3 py-1.5 rounded-xl text-xs font-bold text-purple-200">
               <Zap className="w-3.5 h-3.5 text-purple-400 fill-purple-400" />
               <span>1,450 XP</span>
             </div>
 
-            {/* Flame Streak Pill */}
             <div className="flex items-center gap-1.5 bg-gradient-to-r from-orange-500/20 to-amber-500/10 border border-orange-500/40 px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-orange-200 shadow-sm">
               <Flame className="w-4 h-4 text-[#FF6D00] fill-[#FF6D00]" />
               <span>{t.streak}</span>

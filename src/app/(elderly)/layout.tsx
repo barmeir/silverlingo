@@ -2,35 +2,44 @@
 
 import React from "react";
 import Link from "next/link";
-import { Calendar, Video, Home } from "lucide-react";
+import { Calendar, Video, Home, UserPlus } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useUserProfile } from "@/context/UserProfileContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 import { withBasePath } from "@/lib/assets";
 
-/**
- * Elderly Interface (Hosts) Layout:
- * - Strict WCAG AAA compliance
- * - Minimum 18px body text, 24px+ headers
- * - Minimum 60px height for all buttons, at least 24px margin/gap between clickable elements
- * - Includes accessible 60px-class Language Switcher (EN | עברית)
- */
 export default function ElderlyLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const { lang } = useLanguage();
+  const { profile } = useUserProfile();
+
+  const hostDisplayName =
+    profile && profile.role === "elderly"
+      ? profile.fullName
+      : lang === "he"
+      ? "ארתור פנדלטון"
+      : "Arthur Pendelton";
+
+  const hostAvatarUrl =
+    profile && profile.role === "elderly"
+      ? profile.avatarUrl
+      : "/avatars/arthur.png";
 
   const t = {
     en: {
-      hostSub: "Host: Arthur Pendelton",
+      hostSub: `Host: ${hostDisplayName}`,
       home: "Home",
+      editProfile: "My Profile",
       schedule: "My Weekly Schedule",
       waitingRoom: "Next Call Waiting Room",
     },
     he: {
-      hostSub: "מארח: ארתור פנדלטון",
+      hostSub: `מארח/ת: ${hostDisplayName}`,
       home: "דף הבית",
+      editProfile: "הפרופיל שלי",
       schedule: "היומן השבועי שלי",
       waitingRoom: "חדר המתנה לשיחה הבאה",
     },
@@ -38,7 +47,6 @@ export default function ElderlyLayout({
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#380E6B] via-[#4A148C] to-[#2A0854] text-white font-sans">
-      {/* Calm, High-Contrast Top Bar with >=60px buttons and 24px (gap-6) spacing */}
       <header className="bg-[#240646]/95 backdrop-blur-md border-b-2 border-white/20 px-6 py-5">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-6">
           <Link
@@ -46,9 +54,9 @@ export default function ElderlyLayout({
             className="min-h-[60px] px-4 rounded-2xl flex items-center gap-4 focus:outline-none focus:ring-4 focus:ring-[#FF6D00]"
           >
             <img
-              src={withBasePath("/avatars/arthur.png")}
-              alt="Arthur Pendelton"
-              className="w-14 h-14 rounded-2xl object-cover border-2 border-[#FF6D00] shadow-md"
+              src={withBasePath(hostAvatarUrl)}
+              alt={hostDisplayName}
+              className="w-14 h-14 rounded-2xl object-cover border-2 border-white shadow-md"
             />
             <div>
               <span className="text-[26px] font-extrabold text-white tracking-tight block leading-none">
@@ -60,7 +68,6 @@ export default function ElderlyLayout({
             </div>
           </Link>
 
-          {/* Simple Navigation: 60px+ height, 24px gap (gap-6) */}
           <nav
             aria-label="Host Navigation"
             className="flex flex-wrap items-center gap-6"
@@ -73,6 +80,14 @@ export default function ElderlyLayout({
             >
               <Home className="w-6 h-6" />
               <span>{t.home}</span>
+            </Link>
+
+            <Link
+              href="/onboarding"
+              className="min-h-[60px] px-6 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-[20px] flex items-center gap-3 border-2 border-white/30 transition-colors"
+            >
+              <UserPlus className="w-6 h-6" />
+              <span>{t.editProfile}</span>
             </Link>
 
             <Link

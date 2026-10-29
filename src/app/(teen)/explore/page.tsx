@@ -1,11 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import HostCard, { HostProfile } from "@/components/teen/HostCard";
 import { useLanguage } from "@/context/LanguageContext";
+import {
+  useUserProfile,
+  PREDEFINED_HOBBIES,
+} from "@/context/UserProfileContext";
 import { withBasePath } from "@/lib/assets";
-import { Globe2, Sparkles, Flame, Compass } from "lucide-react";
+import { Globe2, Sparkles, Flame, Compass, UserPlus } from "lucide-react";
 
 const DEMO_HOSTS: HostProfile[] = [
   {
@@ -132,6 +137,7 @@ const HOBBY_FILTERS = [
 export default function TeenExplorePage() {
   const router = useRouter();
   const { lang } = useLanguage();
+  const { profile, customHosts } = useUserProfile();
   const [selectedHobbyFilter, setSelectedHobbyFilter] = useState<string>("All");
   const [localTimezone, setLocalTimezone] = useState<string>("UTC");
 
@@ -141,17 +147,64 @@ export default function TeenExplorePage() {
     );
   }, []);
 
-  const learnerName = "Mateo";
-  const learnerHobbies = [
-    "Football",
-    "Classic Movies & Marvel",
-    "Music & Vinyl",
-  ];
+  const learnerName =
+    profile && profile.role === "teen" ? profile.fullName : "Mateo";
+  const learnerAvatar =
+    profile && profile.role === "teen"
+      ? profile.avatarUrl
+      : "/avatars/mateo.png";
+  const learnerHobbies =
+    profile && profile.hobbies.length > 0
+      ? profile.hobbies
+      : ["Football", "Classic Movies & Marvel", "Music & Vinyl"];
+
+  // Convert any user-created Senior Host profiles into HostCard items
+  const mappedCustomHosts: HostProfile[] = customHosts.map((ch) => ({
+    id: ch.id,
+    fullName: ch.fullName,
+    age: ch.age,
+    country: ch.country,
+    city: ch.city,
+    formerRole: ch.formerRole,
+    rating: "5.0",
+    callsCompleted: 1,
+    bio: ch.bio,
+    avatarUrl: ch.avatarUrl,
+    hobbies: ch.hobbies.map((hName) => {
+      const found = PREDEFINED_HOBBIES.find((p) => p.name === hName);
+      return {
+        name: hName,
+        nameHe: found?.nameHe || hName,
+        icon: found?.icon || "✨",
+      };
+    }),
+    sharedHobbies: ch.hobbies.filter((h) => learnerHobbies.includes(h)),
+    availableSlots: [
+      {
+        id: `slot-${ch.id}-1`,
+        utcStartISO: new Date(Date.now() + 4 * 60 * 1000).toISOString(),
+      },
+      {
+        id: `slot-${ch.id}-2`,
+        utcStartISO: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      },
+    ],
+  }));
+
+  // Dynamically compute sharedHobbies against the active learner's hobbies
+  const allHosts: HostProfile[] = [...mappedCustomHosts, ...DEMO_HOSTS].map(
+    (h) => ({
+      ...h,
+      sharedHobbies: h.hobbies
+        .map((hb) => hb.name)
+        .filter((name) => learnerHobbies.includes(name)),
+    })
+  );
 
   const filteredHosts =
     selectedHobbyFilter === "All"
-      ? DEMO_HOSTS
-      : DEMO_HOSTS.filter((h) =>
+      ? allHosts
+      : allHosts.filter((h) =>
           h.hobbies.some((hb) => hb.name === selectedHobbyFilter)
         );
 
@@ -183,63 +236,54 @@ export default function TeenExplorePage() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-6 max-w-2xl">
             <div className="w-20 h-20 rounded-3xl overflow-hidden border-2 border-[#FF6D00] shadow-xl shrink-0 bg-purple-950">
               <img
-                src={withBasePath("/avatars/mateo.png")}
-                alt="Mateo"
+                src={withBasePath(learnerAvatar)}
+                alt={learnerName}
                 className="w-full h-full object-cover"
               />
             </div>
 
             <div className="space-y-2.5">
-              <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-100 bg-white/10 backdrop-blur-md px-3.5 py-1 rounded-full border border-white/15">
-                <Sparkles className="w-3.5 h-3.5 text-[#FF6D00]" />
-                <span>
-                  {lang === "he"
-                    ? "התאמת תחביבים ב-AI • +50 XP לכל שיחה"
-                    : "AI Hobby Matcher • +50 XP per 30-Min Call"}
-                </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-100 bg-white/10 backdrop-blur-md px-3.5 py-1 rounded-full border border-white/15">
+                  <Sparkles className="w-3.5 h-3.5 text-[#FF6D00]" />
+                  <span>
+                    {lang === "he"
+                      ? "התאמת תחביבים ב-AI • +50 XP לכל שיחה"
+                      : "AI Hobby Matcher • +50 XP per 30-Min Call"}
+                  </span>
+                </div>
+
+                <Link
+                  href="/onboarding"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-300 hover:text-white bg-orange-500/15 border border-orange-400/30 px-3 py-1 rounded-full transition-colors"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>
+                    {profile
+                      ? lang === "he"
+                        ? "עריכת פרופיל"
+                        : "Edit Profile"
+                      : lang === "he"
+                      ? "יצירת פרופיל אישי"
+                      : "Create Your Profile"}
+                  </span>
+                </Link>
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                 {lang === "he"
-                  ? "היי מתיאו! מוכן לתרגל אנגלית היום?"
+                  ? `היי ${learnerName}! מוכנ/ה לתרגל אנגלית היום?`
                   : `Hey ${learnerName}! Ready to practice English today?`}
               </h1>
 
               <p className="text-sm sm:text-[15px] text-purple-100/90 leading-relaxed">
-                {lang === "he" ? (
-                  <>
-                    מצאנו עבורך מארחים דוברי אנגלית שפת אם שחולקים איתך אהבה ל
-                    <span className="text-white font-semibold underline decoration-[#FF6D00] mx-1">
-                      כדורגל
-                    </span>
-                    ,
-                    <span className="text-white font-semibold underline decoration-[#FF6D00] mx-1">
-                      סרטי מארוול
-                    </span>
-                    ו
-                    <span className="text-white font-semibold underline decoration-[#FF6D00] mx-1">
-                      מוזיקה
-                    </span>
-                    .
-                  </>
-                ) : (
-                  <>
-                    We matched you with native-speaking Hosts who share your
-                    love for{" "}
-                    <span className="text-white font-semibold underline decoration-[#FF6D00]">
-                      Football
-                    </span>
-                    ,{" "}
-                    <span className="text-white font-semibold underline decoration-[#FF6D00]">
-                      Marvel Movies
-                    </span>
-                    , and{" "}
-                    <span className="text-white font-semibold underline decoration-[#FF6D00]">
-                      Music
-                    </span>
-                    .
-                  </>
-                )}
+                {lang === "he"
+                  ? `התחביבים שלך ליצירת התאמות AI: ${learnerHobbies.join(
+                      ", "
+                    )}`
+                  : `Your active hobbies for AI matching: ${learnerHobbies.join(
+                      ", "
+                    )}`}
               </p>
             </div>
           </div>

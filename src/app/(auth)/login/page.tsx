@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   ShieldCheck,
   Sparkles,
-  HeartHandshake,
+  UserPlus,
 } from "lucide-react";
 
 type AuthMethod = "email" | "phone";
@@ -31,19 +31,29 @@ export default function PasswordlessLoginPage() {
   const [sent, setSent] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const supabaseActive = isSupabaseConfigured();
+
   const t = {
     en: {
       backHome: "Back to Home",
       pill: "Password-Free Sign In",
       title: "Welcome! Let’s sign you in easily.",
       subtitle:
-        "You never need to remember a password. Choose Email or Text Message below, and we will send you a one-tap sign-in button.",
-      sentTitleEmail: "Check your Email Inbox!",
-      sentTitlePhone: "Check your Phone Messages!",
-      sentBody1: "We sent a personal Magic Sign-In Link to ",
-      sentBody2:
-        ". Simply tap the orange button inside that message to open your account.",
-      continueSchedule: "Continue to Host Schedule →",
+        "You never need to remember a password. Enter your Email or Phone below, or create your interactive profile right away.",
+      sentTitleEmail: supabaseActive
+        ? "Check your Email Inbox!"
+        : "Demo Mode: Ready to Create Your Profile!",
+      sentTitlePhone: supabaseActive
+        ? "Check your Phone Messages!"
+        : "Demo Mode: Ready to Create Your Profile!",
+      sentBody1: supabaseActive
+        ? "We sent a personal Magic Sign-In Link to "
+        : "Since this preview is running in Demo Mode (without an external email server connected), you don't need to wait for an email at ",
+      sentBody2: supabaseActive
+        ? ". Simply tap the orange button inside that message to open your account."
+        : " — click below to set up your name, role, and hobbies right now!",
+      createProfileBtn: "Create My Profile Now →",
+      continueSchedule: "Skip to Host Schedule →",
       useDifferentEmail: "Use a different email address",
       useDifferentPhone: "Use a different phone number",
       step1: "1. How should we send your link?",
@@ -51,9 +61,10 @@ export default function PasswordlessLoginPage() {
       byPhone: "By Phone SMS",
       step2Email: "2. Type your Email Address:",
       step2Phone: "2. Type your Mobile Phone Number:",
-      sending: "Sending your magic link...",
-      sendEmailBtn: "Send My Magic Email Link",
-      sendPhoneBtn: "Send My Text Message Code",
+      sending: "Continuing...",
+      sendEmailBtn: "Continue with Email Magic Link",
+      sendPhoneBtn: "Continue with SMS Code",
+      newHere: "New to SilverLingo? Create Your Profile Directly",
       reassurance: "Safe, private, and designed for effortless sign-in.",
       helpFooter: "Need help? Call our friendly support line anytime.",
     },
@@ -62,23 +73,32 @@ export default function PasswordlessLoginPage() {
       pill: "כניסה מהירה ללא סיסמה",
       title: "ברוכים הבאים! בואו נתחבר בקלות.",
       subtitle:
-        "אין צורך לזכור סיסמאות. בחרו אימייל או הודעת SMS למטה, ונשלח לכם כפתור כניסה בלחיצה אחת.",
-      sentTitleEmail: "בדקו את תיבת האימייל שלכם!",
-      sentTitlePhone: "בדקו את הודעות ה-SMS בטלפון!",
-      sentBody1: "שלחנו קישור כניסה אישי אל ",
-      sentBody2:
-        ". פשוט לחצו על הכפתור הכתום שבתוך ההודעה כדי להיכנס לחשבון.",
-      continueSchedule: "המשך ליומן המארח ←",
+        "אין צורך לזכור סיסמאות. הזינו אימייל או טלפון למטה, או צרו פרופיל אישי באופן מיידי.",
+      sentTitleEmail: supabaseActive
+        ? "בדקו את תיבת האימייל שלכם!"
+        : "מצב הדגמה (Demo): מוכנים ליצירת הפרופיל שלך!",
+      sentTitlePhone: supabaseActive
+        ? "בדקו את הודעות ה-SMS בטלפון!"
+        : "מצב הדגמה (Demo): מוכנים ליצירת הפרופיל שלך!",
+      sentBody1: supabaseActive
+        ? "שלחנו קישור כניסה אישי אל "
+        : "מכיוון שהמערכת פועלת במצב הדגמה (ללא שרת שליחת מיילים חיצוני), אין צורך להמתין לאימייל בכתובת ",
+      sentBody2: supabaseActive
+        ? ". פשוט לחצו על הכפתור הכתום שבתוך ההודעה כדי להיכנס לחשבון."
+        : " — לחצו למטה כדי ליצור את הפרופיל שלכם (שם, תפקיד ותחביבים) ולהתחיל מיד!",
+      createProfileBtn: "יצירת הפרופיל שלי עכשיו ←",
+      continueSchedule: "מעבר ישיר ליומן המארח ←",
       useDifferentEmail: "שימוש בכתובת אימייל אחרת",
       useDifferentPhone: "שימוש במספר טלפון אחר",
-      step1: "1. איך תרצו לקבל את קישור הכניסה?",
+      step1: "1. איך תרצו להתחבר?",
       byEmail: "באמצעות אימייל",
       byPhone: "בהודעת SMS לטלפון",
       step2Email: "2. הקלידו את כתובת האימייל שלכם:",
       step2Phone: "2. הקלידו את מספר הטלפון הנייד:",
-      sending: "שולח קישור התחברות...",
-      sendEmailBtn: "שלחו לי קישור כניסה באימייל",
-      sendPhoneBtn: "שלחו לי קוד כניסה ב-SMS",
+      sending: "ממשיך...",
+      sendEmailBtn: "המשך באמצעות קישור לאימייל",
+      sendPhoneBtn: "המשך באמצעות קוד SMS",
+      newHere: "חדשים ב-SilverLingo? יצירת פרופיל אישי מיד",
       reassurance: "בטוח, פרטי ומותאם לכניסה פשוטה ונוחה.",
       helpFooter: "צריכים עזרה? מוקד התמיכה שלנו זמין עבורכם בכל עת.",
     },
@@ -93,11 +113,7 @@ export default function PasswordlessLoginPage() {
       const detectedTimezone =
         Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
-      const isPlaceholderSupabase =
-        !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-        process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder");
-
-      if (!isPlaceholderSupabase) {
+      if (supabaseActive) {
         if (method === "email") {
           const { error } = await supabase.auth.signInWithOtp({
             email: identifier.trim(),
@@ -117,7 +133,7 @@ export default function PasswordlessLoginPage() {
           if (error) throw error;
         }
       } else {
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 350));
       }
 
       setSent(true);
@@ -182,7 +198,7 @@ export default function PasswordlessLoginPage() {
                 <div className="w-14 h-14 rounded-2xl bg-emerald-700 text-white flex items-center justify-center shrink-0">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
-                <h2 className="text-[28px] font-extrabold text-emerald-950 leading-tight">
+                <h2 className="text-[26px] sm:text-[28px] font-extrabold text-emerald-950 leading-tight">
                   {method === "email" ? t.sentTitleEmail : t.sentTitlePhone}
                 </h2>
               </div>
@@ -195,8 +211,16 @@ export default function PasswordlessLoginPage() {
 
               <div className="pt-2 space-y-6">
                 <Link
+                  href={`/onboarding?contact=${encodeURIComponent(identifier)}`}
+                  className="w-full min-h-[68px] px-6 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] text-white font-extrabold text-[22px] shadow-lg flex items-center justify-center gap-3 transition-all"
+                >
+                  <UserPlus className="w-6 h-6" />
+                  <span>{t.createProfileBtn}</span>
+                </Link>
+
+                <Link
                   href="/availability"
-                  className="w-full min-h-[64px] px-6 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] text-white font-extrabold text-[22px] shadow-lg flex items-center justify-center gap-3 transition-all"
+                  className="w-full min-h-[64px] px-6 rounded-2xl bg-[#4A148C] hover:bg-[#2A0854] text-white font-extrabold text-[20px] shadow-md flex items-center justify-center gap-3 transition-all"
                 >
                   <span>{t.continueSchedule}</span>
                 </Link>
@@ -281,7 +305,7 @@ export default function PasswordlessLoginPage() {
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder={
                     method === "email"
-                      ? "arthur@example.com"
+                      ? "bar@example.com"
                       : "+972 50-123-4567"
                   }
                   className="w-full min-h-[68px] px-6 rounded-2xl bg-white border-2 border-slate-800 text-[22px] font-semibold text-slate-950 placeholder-slate-400 shadow-inner focus:outline-none focus:border-[#4A148C] focus:ring-4 focus:ring-[#4A148C]/25"
@@ -299,7 +323,7 @@ export default function PasswordlessLoginPage() {
               )}
 
               {/* Primary CTA (#FF6D00) — Minimum 68px height, 24px gap above */}
-              <div className="pt-2">
+              <div className="pt-2 space-y-6">
                 <button
                   type="submit"
                   disabled={loading}
@@ -314,6 +338,15 @@ export default function PasswordlessLoginPage() {
                   </span>
                   <ForwardArrow className="w-7 h-7" />
                 </button>
+
+                {/* Direct 1-Click Create Profile Button */}
+                <Link
+                  href="/onboarding"
+                  className="w-full min-h-[64px] px-6 rounded-2xl bg-purple-100 hover:bg-purple-200 border-2 border-[#4A148C] text-[#4A148C] font-extrabold text-[20px] flex items-center justify-center gap-3 transition-colors"
+                >
+                  <UserPlus className="w-6 h-6" />
+                  <span>{t.newHere}</span>
+                </Link>
               </div>
 
               {/* Reassurance Footer */}
