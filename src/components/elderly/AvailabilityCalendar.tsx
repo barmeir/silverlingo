@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   format12Hour,
   localSlotToUTC,
@@ -70,11 +70,14 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
   const [dragMode, setDragMode] = useState<"paint" | "erase">("paint");
   const [saving, setSaving] = useState(false);
   const [saveBanner, setSaveBanner] = useState<string | null>(null);
+  const [userTimezone, setUserTimezone] = useState<string>("Local Time");
 
-  const userTimezone =
-    typeof window !== "undefined"
-      ? Intl.DateTimeFormat().resolvedOptions().timeZone
-      : "Local Time";
+  // Hydration-safe timezone resolution on client mount
+  useEffect(() => {
+    setUserTimezone(
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Local Time"
+    );
+  }, []);
 
   const t = {
     en: {
@@ -100,7 +103,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
       viewing: "Viewing",
       step2Title: "2. Tap or drag across 30-minute time slots:",
       dragTip:
-        "Tip: Hold down your mouse button and drag to paint multiple slots!",
+        "Tip: Hold down your mouse or slide your finger across boxes to paint multiple slots!",
       timeCol: "Time",
       freeBtn: "Free",
       openBtn: "Open",
@@ -127,7 +130,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
       eveningSub: "16:00 – 20:00",
       viewing: "מוצג כעת",
       step2Title: "2. לחצו או גררו על פני משבצות של 30 דקות:",
-      dragTip: "טיפ: החזיקו את כפתור העכבר לחוץ וגררו כדי לסמן מספר שעות ברצף!",
+      dragTip: "טיפ: החזיקו את העכבר או החליקו אצבע כדי לסמן מספר שעות ברצף!",
       timeCol: "שעה",
       freeBtn: "פנוי",
       openBtn: "סמן",
@@ -135,6 +138,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
   }[lang];
 
   useEffect(() => {
+    if (!isSupabaseConfigured()) return;
     async function fetchAvailability() {
       try {
         const { data, error } = await supabase
@@ -160,9 +164,11 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
     const stopDragging = () => setIsDragging(false);
     window.addEventListener("mouseup", stopDragging);
     window.addEventListener("touchend", stopDragging);
+    window.addEventListener("touchcancel", stopDragging);
     return () => {
       window.removeEventListener("mouseup", stopDragging);
       window.removeEventListener("touchend", stopDragging);
+      window.removeEventListener("touchcancel", stopDragging);
     };
   }, []);
 
@@ -195,6 +201,18 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
     applySlotChange(key, dragMode);
   };
 
+  // Touch-screen / iPad drag-to-paint support across slot buttons
+  const handleGridTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || e.touches.length === 0) return;
+    const touch = e.touches[0];
+    const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+    const slotBtn = targetEl?.closest("[data-slot-key]") as HTMLElement | null;
+    const slotKey = slotBtn?.dataset.slotKey;
+    if (slotKey) {
+      applySlotChange(slotKey, dragMode);
+    }
+  };
+
   const handleSaveAvailability = async () => {
     setSaving(true);
     setSaveBanner(null);
@@ -209,11 +227,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
         };
       });
 
-      const isPlaceholderSupabase =
-        !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-        process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder");
-
-      if (!isPlaceholderSupabase) {
+      if (isSupabaseConfigured()) {
         const { error: delError } = await supabase
           .from("availability")
           .delete()
@@ -227,7 +241,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
           if (insError) throw insError;
         }
       } else {
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 250));
       }
 
       setSaveBanner(t.savedMsg(utcPayload.length));
@@ -368,7 +382,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                   <div className="flex items-center gap-3.5 text-start">
                     <Icon
                       className={`w-7 h-7 shrink-0 ${
-                        active ? "text-[#FF6D00]" : "text-[#4A148C]"
+                        active ? "text-amber-300" : "text-[#4A148C]"
                       }`}
                     />
                     <div>
@@ -405,7 +419,10 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
             </span>
           </div>
 
-          <div className="overflow-x-auto pb-4">
+          <div
+            className="overflow-x-auto pb-4"
+            onTouchMove={handleGridTouchMove}
+          >
             <div className="min-w-[980px] bg-slate-100/80 border-2 border-slate-200 rounded-3xl p-6 space-y-6">
               {/* Day Column Headers */}
               <div className="grid grid-cols-8 gap-6 items-center">
@@ -451,8 +468,10 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                       <button
                         key={key}
                         type="button"
+                        data-slot-key={key}
                         onMouseDown={() => handlePointerDown(key)}
                         onMouseEnter={() => handlePointerEnter(key)}
+                        onTouchStart={() => handlePointerDown(key)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
@@ -464,7 +483,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                         }}
                         aria-pressed={isSelected}
                         aria-label={`${dayName} ${format12Hour(time24)}`}
-                        className={`min-h-[64px] rounded-2xl border-2 font-extrabold text-[19px] transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-4 focus:ring-[#FF6D00] ${
+                        className={`min-h-[64px] rounded-2xl border-2 font-extrabold text-[19px] transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-4 focus:ring-[#4A148C] ${
                           isSelected
                             ? "bg-[#4A148C] text-white border-[#2A0854] shadow-md scale-[1.02]"
                             : "bg-white text-slate-700 border-slate-300 hover:border-[#4A148C] hover:text-[#4A148C] hover:bg-purple-50/50"

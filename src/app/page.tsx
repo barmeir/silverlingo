@@ -101,11 +101,11 @@ export default function HomePage() {
           </div>
         </Link>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-6">
           <LanguageSwitcher />
           <Link
             href="/login"
-            className="min-h-[48px] px-5 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white font-bold text-[16px] flex items-center gap-2 transition-all"
+            className="min-h-[60px] px-6 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white font-bold text-[18px] flex items-center gap-2 transition-all"
           >
             <span>{t.signIn}</span>
           </Link>

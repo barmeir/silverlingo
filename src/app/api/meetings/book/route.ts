@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { generateCentralGoogleMeetLink } from "@/lib/google-calendar";
 import { generateMeetingIcebreaker } from "@/lib/openai";
 
@@ -20,9 +20,15 @@ export async function POST(request: Request) {
       hostId,
       scheduledStartUTC,
       hostName: fallbackHostName = "Arthur",
-      hostHobbies: fallbackHostHobbies = ["Football / Soccer", "Classic Movies & Marvel"],
+      hostHobbies: fallbackHostHobbies = [
+        "Football / Soccer",
+        "Classic Movies & Marvel",
+      ],
       learnerName: fallbackLearnerName = "Mateo",
-      learnerHobbies: fallbackLearnerHobbies = ["Football / Soccer", "Music & Vinyl"],
+      learnerHobbies: fallbackLearnerHobbies = [
+        "Football / Soccer",
+        "Music & Vinyl",
+      ],
     } = body;
 
     if (!hostId || !scheduledStartUTC) {
@@ -44,52 +50,56 @@ export async function POST(request: Request) {
     const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
     const scheduledEndUTC = endDate.toISOString();
 
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    const learnerId =
-      body.learnerId || user?.id || "00000000-0000-0000-0000-000000000002";
-
+    let learnerId =
+      body.learnerId || "00000000-0000-0000-0000-000000000002";
     let hostName = fallbackHostName;
     let learnerName = fallbackLearnerName;
     let hostHobbies = fallbackHostHobbies;
     let learnerHobbies = fallbackLearnerHobbies;
 
-    // Attempt to enrich names & hobbies from Supabase if connected
-    try {
-      const { data: usersData } = await supabase
-        .from("users")
-        .select("id, full_name")
-        .in("id", [hostId, learnerId]);
+    const supabaseReady = isSupabaseConfigured();
 
-      if (usersData && usersData.length > 0) {
-        const foundHost = usersData.find((u) => u.id === hostId);
-        const foundLearner = usersData.find((u) => u.id === learnerId);
-        if (foundHost?.full_name) hostName = foundHost.full_name;
-        if (foundLearner?.full_name) learnerName = foundLearner.full_name;
+    // Enrich names & hobbies from Supabase only when real credentials are configured
+    if (supabaseReady) {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user?.id) learnerId = user.id;
+
+        const { data: usersData } = await supabase
+          .from("users")
+          .select("id, full_name")
+          .in("id", [hostId, learnerId]);
+
+        if (usersData && usersData.length > 0) {
+          const foundHost = usersData.find((u) => u.id === hostId);
+          const foundLearner = usersData.find((u) => u.id === learnerId);
+          if (foundHost?.full_name) hostName = foundHost.full_name;
+          if (foundLearner?.full_name) learnerName = foundLearner.full_name;
+        }
+
+        const { data: hobbiesData } = await supabase
+          .from("user_hobbies")
+          .select("user_id, hobbies(name)")
+          .in("user_id", [hostId, learnerId]);
+
+        if (hobbiesData && hobbiesData.length > 0) {
+          const hList: string[] = [];
+          const lList: string[] = [];
+          hobbiesData.forEach((row: any) => {
+            const hobbyName = row.hobbies?.name;
+            if (!hobbyName) return;
+            if (row.user_id === hostId) hList.push(hobbyName);
+            if (row.user_id === learnerId) lList.push(hobbyName);
+          });
+          if (hList.length > 0) hostHobbies = hList;
+          if (lList.length > 0) learnerHobbies = lList;
+        }
+      } catch {
+        // Fallback to provided values
       }
-
-      const { data: hobbiesData } = await supabase
-        .from("user_hobbies")
-        .select("user_id, hobbies(name)")
-        .in("user_id", [hostId, learnerId]);
-
-      if (hobbiesData && hobbiesData.length > 0) {
-        const hList: string[] = [];
-        const lList: string[] = [];
-        hobbiesData.forEach((row: any) => {
-          const hobbyName = row.hobbies?.name;
-          if (!hobbyName) return;
-          if (row.user_id === hostId) hList.push(hobbyName);
-          if (row.user_id === learnerId) lList.push(hobbyName);
-        });
-        if (hList.length > 0) hostHobbies = hList;
-        if (lList.length > 0) learnerHobbies = lList;
-      }
-    } catch {
-      // Fallback to provided values if Supabase isn't populated yet
     }
 
     // 1. Generate Google Meet link via Central Google Cloud Service Account
@@ -121,26 +131,29 @@ export async function POST(request: Request) {
       status: "scheduled",
     };
 
-    try {
-      const { data: insertedMeeting, error: dbError } = await supabase
-        .from("meetings")
-        .insert({
-          host_id: hostId,
-          learner_id: learnerId,
-          scheduled_start: startDate.toISOString(),
-          scheduled_end: scheduledEndUTC,
-          google_meet_link: googleMeetLink,
-          ai_icebreaker: aiIcebreaker,
-          status: "scheduled",
-        })
-        .select()
-        .single();
+    if (supabaseReady) {
+      try {
+        const supabase = createClient();
+        const { data: insertedMeeting, error: dbError } = await supabase
+          .from("meetings")
+          .insert({
+            host_id: hostId,
+            learner_id: learnerId,
+            scheduled_start: startDate.toISOString(),
+            scheduled_end: scheduledEndUTC,
+            google_meet_link: googleMeetLink,
+            ai_icebreaker: aiIcebreaker,
+            status: "scheduled",
+          })
+          .select()
+          .single();
 
-      if (!dbError && insertedMeeting) {
-        meetingRecord = insertedMeeting;
+        if (!dbError && insertedMeeting) {
+          meetingRecord = insertedMeeting;
+        }
+      } catch {
+        // Keep in-memory demo meeting record
       }
-    } catch {
-      // Keep in-memory demo meeting record if Supabase credentials aren't configured yet
     }
 
     return NextResponse.json({

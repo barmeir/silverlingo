@@ -10,8 +10,9 @@ interface LanguageSwitcherProps {
 
 /**
  * Persistent top-bar Language Switcher pill (EN | עברית).
- * Avoids hidden settings drawers so users can switch languages on first visit
- * (including before logging in) and meets WCAG AAA elderly touch-target standards.
+ * - Elderly variant strictly enforces >=60px touch target height and 24px gap
+ * - Uses Deep Purple / White high-contrast styling so Vibrant Orange (#FF6D00)
+ *   remains exclusively reserved for main CTAs ("Book", "Join Call", etc.)
  */
 export default function LanguageSwitcher({
   size = "default",
@@ -23,16 +24,16 @@ export default function LanguageSwitcher({
       <div
         role="group"
         aria-label="Language Switcher / בחירת שפה"
-        className="inline-flex items-center bg-white/10 border-2 border-white/30 rounded-2xl p-1.5 gap-2"
+        className="inline-flex items-center gap-6"
       >
         <button
           type="button"
           onClick={() => setLang("en")}
           aria-pressed={lang === "en"}
-          className={`min-h-[52px] px-5 rounded-xl font-extrabold text-[19px] transition-all flex items-center gap-2 ${
+          className={`min-h-[60px] px-6 rounded-2xl font-extrabold text-[19px] border-2 transition-all flex items-center gap-2 focus:outline-none focus:ring-4 focus:ring-white ${
             lang === "en"
-              ? "bg-[#FF6D00] text-white shadow-md"
-              : "text-white hover:bg-white/10"
+              ? "bg-white text-slate-950 border-white shadow-md"
+              : "bg-white/10 text-white border-white/30 hover:bg-white/20"
           }`}
         >
           <span>🇺🇸 EN</span>
@@ -42,10 +43,10 @@ export default function LanguageSwitcher({
           type="button"
           onClick={() => setLang("he")}
           aria-pressed={lang === "he"}
-          className={`min-h-[52px] px-5 rounded-xl font-extrabold text-[19px] transition-all flex items-center gap-2 ${
+          className={`min-h-[60px] px-6 rounded-2xl font-extrabold text-[19px] border-2 transition-all flex items-center gap-2 focus:outline-none focus:ring-4 focus:ring-white ${
             lang === "he"
-              ? "bg-[#FF6D00] text-white shadow-md"
-              : "text-white hover:bg-white/10"
+              ? "bg-white text-slate-950 border-white shadow-md"
+              : "bg-white/10 text-white border-white/30 hover:bg-white/20"
           }`}
         >
           <span>🇮🇱 עברית</span>
@@ -60,14 +61,14 @@ export default function LanguageSwitcher({
       aria-label="Language Switcher / בחירת שפה"
       className="inline-flex items-center bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-1 gap-1"
     >
-      <Languages className="w-4 h-4 text-[#FF6D00] mx-2 shrink-0" />
+      <Languages className="w-4 h-4 text-purple-200 mx-2 shrink-0" />
       <button
         type="button"
         onClick={() => setLang("en")}
         aria-pressed={lang === "en"}
         className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
           lang === "en"
-            ? "bg-[#FF6D00] text-white shadow-sm"
+            ? "bg-white text-slate-950 shadow-sm"
             : "text-purple-100 hover:text-white hover:bg-white/10"
         }`}
       >
@@ -79,7 +80,7 @@ export default function LanguageSwitcher({
         aria-pressed={lang === "he"}
         className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
           lang === "he"
-            ? "bg-[#FF6D00] text-white shadow-sm"
+            ? "bg-white text-slate-950 shadow-sm"
             : "text-purple-100 hover:text-white hover:bg-white/10"
         }`}
       >

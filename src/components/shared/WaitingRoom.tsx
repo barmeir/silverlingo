@@ -48,16 +48,17 @@ export default function WaitingRoom({
   const { lang, isRTL } = useLanguage();
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
 
-  const [secondsUntilStart, setSecondsUntilStart] = useState<number>(() => {
-    const diffMs = new Date(scheduledStartUTC).getTime() - Date.now();
-    return Math.floor(diffMs / 1000);
-  });
+  const [mounted, setMounted] = useState(false);
+  const [secondsUntilStart, setSecondsUntilStart] = useState<number>(240);
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    setMounted(true);
+    const updateCountdown = () => {
       const diffMs = new Date(scheduledStartUTC).getTime() - Date.now();
       setSecondsUntilStart(Math.floor(diffMs / 1000));
-    }, 1000);
+    };
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
   }, [scheduledStartUTC]);
 
@@ -168,7 +169,9 @@ export default function WaitingRoom({
                 <Calendar className="w-6 h-6 text-[#4A148C] shrink-0" />
                 <span>{t.localTimeLabel}</span>
                 <strong dir="ltr" className="text-slate-950">
-                  {formatUTCToLocalDisplay(scheduledStartUTC)}
+                  {mounted
+                    ? formatUTCToLocalDisplay(scheduledStartUTC)
+                    : "Loading local time..."}
                 </strong>
                 <span>{t.durationLabel}</span>
               </p>

@@ -133,6 +133,13 @@ export default function TeenExplorePage() {
   const router = useRouter();
   const { lang } = useLanguage();
   const [selectedHobbyFilter, setSelectedHobbyFilter] = useState<string>("All");
+  const [localTimezone, setLocalTimezone] = useState<string>("UTC");
+
+  React.useEffect(() => {
+    setLocalTimezone(
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+    );
+  }, []);
 
   const learnerName = "Mateo";
   const learnerHobbies = [
@@ -140,11 +147,6 @@ export default function TeenExplorePage() {
     "Classic Movies & Marvel",
     "Music & Vinyl",
   ];
-
-  const localTimezone =
-    typeof window !== "undefined"
-      ? Intl.DateTimeFormat().resolvedOptions().timeZone
-      : "UTC";
 
   const filteredHosts =
     selectedHobbyFilter === "All"
