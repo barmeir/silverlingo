@@ -13,7 +13,7 @@ export interface HobbyOption {
 }
 
 export const PREDEFINED_HOBBIES: HobbyOption[] = [
-  { id: "football", name: "Football", nameHe: "כדורגל", icon: "⚽" },
+  { id: "football", name: "Football / Soccer", nameHe: "כדורגל", icon: "⚽" },
   {
     id: "marvel",
     name: "Classic Movies & Marvel",
@@ -58,7 +58,7 @@ export interface UserProfile {
   formerRole: string;
   bio: string;
   avatarUrl: string;
-  hobbies: string[]; // Array of hobby `name` strings (e.g. ["Football", "Music & Vinyl"])
+  hobbies: string[]; // Array of hobby `name` strings
   contact?: string;
   timezone: string;
 }
@@ -98,39 +98,145 @@ export function UserProfileProvider({
     } catch {
       // Ignore storage parse errors
     }
+
+    // If Supabase is configured and user has an active session, sync profile from DB
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      supabase.auth
+        .getUser()
+        .then(async ({ data }) => {
+          const authUser = data?.user;
+          if (!authUser) return;
+
+          const { data: dbUser } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", authUser.id)
+            .maybeSingle();
+
+          if (dbUser) {
+            const { data: dbHobbies } = await supabase
+              .from("user_hobbies")
+              .select("hobbies(name)")
+              .eq("user_id", authUser.id);
+
+            const hobbyNames =
+              dbHobbies
+                ?.map((row: any) => row.hobbies?.name)
+                .filter(Boolean) || [];
+
+            setProfile((prev) => {
+              const merged: UserProfile = {
+                id: dbUser.id,
+                role: dbUser.role,
+                fullName: dbUser.full_name,
+                age: dbUser.age || prev?.age || 16,
+                country: dbUser.country || prev?.country || "Israel",
+                city: prev?.city || "",
+                formerRole:
+                  prev?.formerRole ||
+                  (dbUser.role === "elderly"
+                    ? "Native English Host"
+                    : "Teen Learner"),
+                bio: prev?.bio || "",
+                avatarUrl:
+                  prev?.avatarUrl ||
+                  (dbUser.role === "elderly"
+                    ? "/avatars/arthur.png"
+                    : "/avatars/mateo.png"),
+                hobbies:
+                  hobbyNames.length > 0
+                    ? hobbyNames
+                    : prev?.hobbies || ["Football / Soccer"],
+                contact: authUser.email || authUser.phone || prev?.contact,
+                timezone: dbUser.timezone || "UTC",
+              };
+              window.localStorage.setItem(
+                STORAGE_PROFILE_KEY,
+                JSON.stringify(merged)
+              );
+              return merged;
+            });
+          }
+        })
+        .catch(() => {
+          // Ignore unauthenticated session
+        });
+    }
   }, []);
 
   const saveProfile = async (newProfile: UserProfile) => {
-    setProfile(newProfile);
-    window.localStorage.setItem(
-      STORAGE_PROFILE_KEY,
-      JSON.stringify(newProfile)
-    );
+    let finalProfile = { ...newProfile };
 
-    if (newProfile.role === "elderly") {
-      setCustomHosts((prev) => {
-        const filtered = prev.filter((h) => h.id !== newProfile.id);
-        const updated = [newProfile, ...filtered];
-        window.localStorage.setItem(STORAGE_HOSTS_KEY, JSON.stringify(updated));
-        return updated;
-      });
-    }
-
-    // Also persist to Supabase if configured
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        await supabase.from("users").upsert({
-          id: newProfile.id,
-          role: newProfile.role,
-          full_name: newProfile.fullName,
-          timezone: newProfile.timezone,
-          age: newProfile.age,
-          country: newProfile.country,
-        });
+        const {
+          data: { user: authUser },
+        } = await supabase.auth.getUser();
+
+        if (authUser?.id) {
+          finalProfile.id = authUser.id;
+        }
+
+        // Upsert user record if authenticated
+        if (authUser?.id) {
+          await supabase.from("users").upsert({
+            id: authUser.id,
+            role: finalProfile.role,
+            full_name: finalProfile.fullName,
+            timezone: finalProfile.timezone,
+            age: finalProfile.age,
+            country: finalProfile.country,
+          });
+
+          // Sync hobbies in public.user_hobbies
+          const { data: allHobbies } = await supabase
+            .from("hobbies")
+            .select("id, name");
+
+          if (allHobbies && allHobbies.length > 0) {
+            await supabase
+              .from("user_hobbies")
+              .delete()
+              .eq("user_id", authUser.id);
+
+            const hobbyMappings = finalProfile.hobbies
+              .map((hName) => {
+                const match = allHobbies.find(
+                  (dbH) =>
+                    dbH.name.toLowerCase() === hName.toLowerCase() ||
+                    dbH.name.toLowerCase().includes(hName.toLowerCase())
+                );
+                return match
+                  ? { user_id: authUser.id, hobby_id: match.id }
+                  : null;
+              })
+              .filter(Boolean);
+
+            if (hobbyMappings.length > 0) {
+              await supabase.from("user_hobbies").insert(hobbyMappings);
+            }
+          }
+        }
       } catch {
         // Fallback to localStorage profile
       }
+    }
+
+    setProfile(finalProfile);
+    window.localStorage.setItem(
+      STORAGE_PROFILE_KEY,
+      JSON.stringify(finalProfile)
+    );
+
+    if (finalProfile.role === "elderly") {
+      setCustomHosts((prev) => {
+        const filtered = prev.filter((h) => h.id !== finalProfile.id);
+        const updated = [finalProfile, ...filtered];
+        window.localStorage.setItem(STORAGE_HOSTS_KEY, JSON.stringify(updated));
+        return updated;
+      });
     }
   };
 

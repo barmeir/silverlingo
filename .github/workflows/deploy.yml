@@ -37,6 +37,8 @@ jobs:
       - name: Build with Next.js static export
         env:
           GITHUB_PAGES: "true"
+          NEXT_PUBLIC_SUPABASE_URL: "https://ezlqnyrfkrfryxswbhgg.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_D7HnPLLIIOoIYgc0CvxNWw_pH3vbhcQ"
         run: npm run build
 
       - name: Add .nojekyll file

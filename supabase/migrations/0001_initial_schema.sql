@@ -83,6 +83,9 @@ ALTER TABLE public.meetings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users are viewable by authenticated users" ON public.users
   FOR SELECT TO authenticated USING (true);
 
+CREATE POLICY "Users can insert own profile" ON public.users
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
+
 CREATE POLICY "Users can update own profile" ON public.users
   FOR UPDATE TO authenticated USING (auth.uid() = id);
 
@@ -92,6 +95,9 @@ CREATE POLICY "Hobbies are viewable by everyone" ON public.hobbies
 CREATE POLICY "User hobbies viewable by authenticated users" ON public.user_hobbies
   FOR SELECT TO authenticated USING (true);
 
+CREATE POLICY "Users manage own hobbies" ON public.user_hobbies
+  FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Hosts manage own availability" ON public.availability
   FOR ALL TO authenticated USING (auth.uid() = host_id) WITH CHECK (auth.uid() = host_id);
 
@@ -100,3 +106,6 @@ CREATE POLICY "Learners can view all availability" ON public.availability
 
 CREATE POLICY "Participants can view their meetings" ON public.meetings
   FOR SELECT TO authenticated USING (auth.uid() = host_id OR auth.uid() = learner_id);
+
+CREATE POLICY "Participants can insert meetings" ON public.meetings
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = learner_id OR auth.uid() = host_id);
