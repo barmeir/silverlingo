@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -18,22 +18,59 @@ import {
   ArrowLeft,
   Check,
   UserCheck,
-  Globe2,
-  HeartHandshake,
+  Upload,
+  Camera,
 } from "lucide-react";
 
 const AVATAR_CHOICES = [
-  { id: "mateo", url: "/avatars/mateo.png", labelEn: "Portrait 1", labelHe: "דיוקן 1" },
-  { id: "arthur", url: "/avatars/arthur.png", labelEn: "Portrait 2", labelHe: "דיוקן 2" },
-  { id: "eleanor", url: "/avatars/eleanor.png", labelEn: "Portrait 3", labelHe: "דיוקן 3" },
-  { id: "walter", url: "/avatars/walter.png", labelEn: "Portrait 4", labelHe: "דיוקן 4" },
+  { id: "mateo", url: "/avatars/mateo.png", labelEn: "Preset 1", labelHe: "דוגמה 1" },
+  { id: "arthur", url: "/avatars/arthur.png", labelEn: "Preset 2", labelHe: "דוגמה 2" },
+  { id: "eleanor", url: "/avatars/eleanor.png", labelEn: "Preset 3", labelHe: "דוגמה 3" },
+  { id: "walter", url: "/avatars/walter.png", labelEn: "Preset 4", labelHe: "דוגמה 4" },
 ];
+
+/**
+ * Center-crops and compresses an uploaded image file into a crisp 360x360 JPEG data URL
+ * so it loads instantaneously and fits comfortably in browser storage.
+ */
+function resizeUploadedImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 360;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(event.target?.result as string);
+          return;
+        }
+
+        // Center-crop square
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+
+        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+        resolve(canvas.toDataURL("image/jpeg", 0.86));
+      };
+      img.onerror = () => reject(new Error("Could not load image"));
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error("Could not read file"));
+    reader.readAsDataURL(file);
+  });
+}
 
 function OnboardingFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { lang, isRTL } = useLanguage();
   const { profile, saveProfile } = useUserProfile();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const ForwardArrow = isRTL ? ArrowLeft : ArrowRight;
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
@@ -50,8 +87,11 @@ function OnboardingFormContent() {
     "I love practicing spoken English and talking about sports, movies, and music!"
   );
   const [avatarUrl, setAvatarUrl] = useState("/avatars/mateo.png");
+  const [customUploadedAvatar, setCustomUploadedAvatar] = useState<string | null>(
+    null
+  );
   const [selectedHobbies, setSelectedHobbies] = useState<string[]>([
-    "Football",
+    "Football / Soccer",
     "Classic Movies & Marvel",
     "Music & Vinyl",
   ]);
@@ -69,6 +109,9 @@ function OnboardingFormContent() {
       setFormerRole(profile.formerRole);
       setBio(profile.bio);
       setAvatarUrl(profile.avatarUrl);
+      if (profile.avatarUrl.startsWith("data:")) {
+        setCustomUploadedAvatar(profile.avatarUrl);
+      }
       setSelectedHobbies(profile.hobbies);
     }
   }, [profile]);
@@ -77,7 +120,9 @@ function OnboardingFormContent() {
     setRole(nextRole);
     if (nextRole === "elderly") {
       if (age === "16") setAge("72");
-      if (avatarUrl === "/avatars/mateo.png") setAvatarUrl("/avatars/arthur.png");
+      if (!customUploadedAvatar && avatarUrl === "/avatars/mateo.png") {
+        setAvatarUrl("/avatars/arthur.png");
+      }
       if (formerRole === "High School Student") {
         setFormerRole(
           lang === "he" ? "מורה בגמלאות" : "Retired Teacher & Storyteller"
@@ -92,10 +137,39 @@ function OnboardingFormContent() {
       }
     } else {
       if (Number(age) > 40) setAge("16");
-      if (avatarUrl === "/avatars/arthur.png") setAvatarUrl("/avatars/mateo.png");
+      if (!customUploadedAvatar && avatarUrl === "/avatars/arthur.png") {
+        setAvatarUrl("/avatars/mateo.png");
+      }
       if (formerRole.includes("Retired") || formerRole.includes("בגמלאות")) {
         setFormerRole(lang === "he" ? "תלמיד/ת תיכון" : "High School Student");
       }
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setErrorMsg(
+        lang === "he"
+          ? "נא לבחור קובץ תמונה תקין (JPG, PNG, WEBP)."
+          : "Please select a valid image file (JPG, PNG, WEBP)."
+      );
+      return;
+    }
+
+    try {
+      const dataUrl = await resizeUploadedImage(file);
+      setCustomUploadedAvatar(dataUrl);
+      setAvatarUrl(dataUrl);
+      setErrorMsg(null);
+    } catch {
+      setErrorMsg(
+        lang === "he"
+          ? "לא ניתן היה לטעון את התמונה. נסו תמונה אחרת."
+          : "Could not process the selected photo. Please try another image."
+      );
     }
   };
 
@@ -167,13 +241,17 @@ function OnboardingFormContent() {
       pill: "Create Your SilverLingo Profile",
       title: "Tell us a little about yourself!",
       subtitle:
-        "Choose your role, pick your favorite hobbies, and start connecting immediately—no email waiting required.",
+        "Choose your role, upload your photo, pick your favorite hobbies, and start connecting immediately.",
       step1: "1. Who are you joining as?",
       teenTitle: "🎧 Teen Learner",
       teenDesc: "I want to practice speaking English with friendly hosts",
       elderlyTitle: "👴🏼 Senior Host",
       elderlyDesc: "I am a fluent English speaker excited to chat & share stories",
-      step2: "2. Choose your profile photo:",
+      step2: "2. Choose or upload your profile photo:",
+      uploadBtn: "Upload Your Own Photo",
+      uploadSub: "JPG, PNG or Camera Photo (Auto-cropped)",
+      uploadedLabel: "Your Photo",
+      orPresets: "Or choose a preset portrait:",
       step3: "3. Your Details:",
       nameLabel: "Full Name",
       namePlaceholder: "e.g., Bar Meir",
@@ -195,13 +273,17 @@ function OnboardingFormContent() {
       pill: "יצירת פרופיל אישי ב-SilverLingo",
       title: "ספרו לנו קצת על עצמכם!",
       subtitle:
-        "בחרו את התפקיד שלכם, סמנו תחביבים משותפים והתחילו מיד — ללא צורך בהמתנה לאימייל.",
+        "בחרו את התפקיד שלכם, העלו תמונה, סמנו תחביבים משותפים והתחילו מיד.",
       step1: "1. בתור מי תרצו להצטרף?",
       teenTitle: "🎧 תלמיד/ה (Teen Learner)",
       teenDesc: "אני רוצה לתרגל שיחה באנגלית עם מארחים דוברי שפת אם",
       elderlyTitle: "👴🏼 מארח/ת ותיק/ה (Senior Host)",
       elderlyDesc: "אני דובר/ת אנגלית ורוצה לשוחח ולשתף סיפורי חיים",
-      step2: "2. בחרו תמונת פרופיל:",
+      step2: "2. בחרו או העלו תמונת פרופיל:",
+      uploadBtn: "העלאת תמונה מהמכשיר / מצלמה",
+      uploadSub: "תמונת JPG או PNG מהמחשב או מהטלפון",
+      uploadedLabel: "התמונה שלך",
+      orPresets: "או בחרו מתוך תמונות הדוגמה:",
       step3: "3. הפרטים האישיים שלכם:",
       nameLabel: "שם מלא",
       namePlaceholder: "לדוגמה: בר מאיר",
@@ -327,37 +409,102 @@ function OnboardingFormContent() {
               </div>
             </div>
 
-            {/* Step 2: Portrait Selector */}
-            <div className="space-y-4">
+            {/* Step 2: Upload Custom Photo OR Pick a Preset Portrait */}
+            <div className="space-y-5">
               <label className="block text-[22px] font-extrabold text-slate-950">
                 {t.step2}
               </label>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                {AVATAR_CHOICES.map((av) => {
-                  const active = avatarUrl === av.url;
-                  return (
+              {/* Upload Photo Card + Active Preview */}
+              <div className="p-6 rounded-3xl bg-purple-50/80 border-2 border-purple-200 flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-5">
+                  <div className="relative w-24 h-24 rounded-3xl overflow-hidden border-4 border-[#4A148C] shadow-lg bg-white shrink-0">
+                    <img
+                      src={withBasePath(avatarUrl)}
+                      alt="Selected Profile Avatar"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[20px] font-extrabold text-slate-950 flex items-center gap-2">
+                      <Camera className="w-5 h-5 text-[#4A148C]" />
+                      <span>{t.uploadBtn}</span>
+                    </div>
+                    <p className="text-[17px] text-slate-700">{t.uploadSub}</p>
+                  </div>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full sm:w-auto min-h-[64px] px-7 rounded-2xl bg-[#4A148C] hover:bg-[#380E6B] text-white font-extrabold text-[19px] shadow-md flex items-center justify-center gap-3 transition-all shrink-0 focus:outline-none focus:ring-4 focus:ring-[#4A148C]/40"
+                >
+                  <Upload className="w-6 h-6" />
+                  <span>{t.uploadBtn}</span>
+                </button>
+              </div>
+
+              {/* Preset Portraits Row */}
+              <div className="space-y-3">
+                <span className="block text-[18px] font-bold text-slate-700">
+                  {t.orPresets}
+                </span>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+                  {customUploadedAvatar && (
                     <button
-                      key={av.id}
                       type="button"
-                      onClick={() => setAvatarUrl(av.url)}
+                      onClick={() => setAvatarUrl(customUploadedAvatar)}
                       className={`p-3 rounded-3xl border-2 transition-all flex flex-col items-center gap-2 ${
-                        active
+                        avatarUrl === customUploadedAvatar
                           ? "bg-purple-50 border-[#4A148C] ring-4 ring-[#4A148C]/25 shadow-md"
                           : "bg-white border-slate-300 hover:border-slate-600"
                       }`}
                     >
                       <img
-                        src={withBasePath(av.url)}
-                        alt={av.labelEn}
+                        src={customUploadedAvatar}
+                        alt={t.uploadedLabel}
                         className="w-20 h-20 rounded-2xl object-cover border border-slate-300"
                       />
-                      <span className="text-[16px] font-bold text-slate-900">
-                        {lang === "he" ? av.labelHe : av.labelEn}
+                      <span className="text-[16px] font-bold text-[#4A148C]">
+                        ✓ {t.uploadedLabel}
                       </span>
                     </button>
-                  );
-                })}
+                  )}
+
+                  {AVATAR_CHOICES.map((av) => {
+                    const active = avatarUrl === av.url;
+                    return (
+                      <button
+                        key={av.id}
+                        type="button"
+                        onClick={() => setAvatarUrl(av.url)}
+                        className={`p-3 rounded-3xl border-2 transition-all flex flex-col items-center gap-2 ${
+                          active
+                            ? "bg-purple-50 border-[#4A148C] ring-4 ring-[#4A148C]/25 shadow-md"
+                            : "bg-white border-slate-300 hover:border-slate-600"
+                        }`}
+                      >
+                        <img
+                          src={withBasePath(av.url)}
+                          alt={av.labelEn}
+                          className="w-20 h-20 rounded-2xl object-cover border border-slate-300"
+                        />
+                        <span className="text-[16px] font-bold text-slate-900">
+                          {lang === "he" ? av.labelHe : av.labelEn}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

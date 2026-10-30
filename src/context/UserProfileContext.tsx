@@ -209,10 +209,12 @@ export function UserProfileProvider({
                     dbH.name.toLowerCase().includes(hName.toLowerCase())
                 );
                 return match
-                  ? { user_id: authUser.id, hobby_id: match.id }
+                  ? { user_id: authUser.id, hobby_id: String(match.id) }
                   : null;
               })
-              .filter(Boolean);
+              .filter(
+                (m): m is { user_id: string; hobby_id: string } => m !== null
+              );
 
             if (hobbyMappings.length > 0) {
               await supabase.from("user_hobbies").insert(hobbyMappings);

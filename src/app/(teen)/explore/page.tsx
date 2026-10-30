@@ -219,7 +219,9 @@ export default function TeenExplorePage() {
   }) => {
     const query = new URLSearchParams({
       host: bookingData.hostName,
-      hostAvatar: bookingData.hostAvatar,
+      ...(bookingData.hostAvatar.startsWith("data:")
+        ? {}
+        : { hostAvatar: bookingData.hostAvatar }),
       learner: bookingData.learnerName,
       start: bookingData.scheduledStartUTC,
       meet: bookingData.googleMeetLink,
