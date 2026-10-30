@@ -29,36 +29,68 @@ const AVATAR_CHOICES = [
   { id: "walter", url: "/avatars/walter.png", labelEn: "Preset 4", labelHe: "דוגמה 4" },
 ];
 
+const SUPPORTED_IMAGE_EXTENSIONS =
+  /\.(jpg|jpeg|png|apng|webp|avif|heic|heif|gif|svg|bmp|tif|tiff|jfif|pjpeg|pjp|ico|raw|dng)$/i;
+
 /**
- * Center-crops and compresses an uploaded image file into a crisp 360x360 JPEG data URL
- * so it loads instantaneously and fits comfortably in browser storage.
+ * Center-crops and optimizes an uploaded image file into a crisp 360x360 portrait.
+ * Supports JPG, PNG, WEBP, AVIF, GIF, SVG, BMP, TIFF, JFIF, ICO, and HEIC/HEIF.
+ * Preserves transparency for PNG/SVG/WEBP/GIF and gracefully falls back if canvas
+ * decoding is unsupported for a specific container.
  */
 function resizeUploadedImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      if (!rawDataUrl) {
+        reject(new Error("Empty file"));
+        return;
+      }
+
+      // Keep SVGs and animated GIFs intact as data URLs
+      if (
+        file.type === "image/svg+xml" ||
+        file.type === "image/gif" ||
+        /\.svg$/i.test(file.name)
+      ) {
+        resolve(rawDataUrl);
+        return;
+      }
+
       const img = new Image();
       img.onload = () => {
-        const size = 360;
-        const canvas = document.createElement("canvas");
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          resolve(event.target?.result as string);
-          return;
+        try {
+          const size = 360;
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(rawDataUrl);
+            return;
+          }
+
+          // Fill subtle light backdrop for transparent images
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, size, size);
+
+          // Center-crop square
+          const minSide = Math.min(img.width || size, img.height || size);
+          const sx = ((img.width || size) - minSide) / 2;
+          const sy = ((img.height || size) - minSide) / 2;
+
+          ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+          resolve(canvas.toDataURL("image/webp", 0.88));
+        } catch {
+          resolve(rawDataUrl);
         }
-
-        // Center-crop square
-        const minSide = Math.min(img.width, img.height);
-        const sx = (img.width - minSide) / 2;
-        const sy = (img.height - minSide) / 2;
-
-        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
-        resolve(canvas.toDataURL("image/jpeg", 0.86));
       };
-      img.onerror = () => reject(new Error("Could not load image"));
-      img.src = event.target?.result as string;
+      img.onerror = () => {
+        // Fallback to raw data URL if browser cannot decode container in Canvas
+        resolve(rawDataUrl);
+      };
+      img.src = rawDataUrl;
     };
     reader.onerror = () => reject(new Error("Could not read file"));
     reader.readAsDataURL(file);
@@ -150,11 +182,14 @@ function OnboardingFormContent() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
+    const isImageMime = file.type.startsWith("image/");
+    const isImageExt = SUPPORTED_IMAGE_EXTENSIONS.test(file.name);
+
+    if (!isImageMime && !isImageExt) {
       setErrorMsg(
         lang === "he"
-          ? "נא לבחור קובץ תמונה תקין (JPG, PNG, WEBP)."
-          : "Please select a valid image file (JPG, PNG, WEBP)."
+          ? "נא לבחור קובץ תמונה (JPG, PNG, HEIC, WEBP, AVIF, GIF, SVG, BMP, TIFF)."
+          : "Please select a valid photo file (JPG, PNG, HEIC, WEBP, AVIF, GIF, SVG, BMP, TIFF)."
       );
       return;
     }
@@ -249,7 +284,8 @@ function OnboardingFormContent() {
       elderlyDesc: "I am a fluent English speaker excited to chat & share stories",
       step2: "2. Choose or upload your profile photo:",
       uploadBtn: "Upload Your Own Photo",
-      uploadSub: "JPG, PNG or Camera Photo (Auto-cropped)",
+      uploadSub:
+        "Supports all formats: JPG, PNG, HEIC (iPhone), WEBP, AVIF, GIF, SVG, BMP, TIFF & Camera",
       uploadedLabel: "Your Photo",
       orPresets: "Or choose a preset portrait:",
       step3: "3. Your Details:",
@@ -281,7 +317,8 @@ function OnboardingFormContent() {
       elderlyDesc: "אני דובר/ת אנגלית ורוצה לשוחח ולשתף סיפורי חיים",
       step2: "2. בחרו או העלו תמונת פרופיל:",
       uploadBtn: "העלאת תמונה מהמכשיר / מצלמה",
-      uploadSub: "תמונת JPG או PNG מהמחשב או מהטלפון",
+      uploadSub:
+        "תומך בכל סוגי התמונות: JPG, PNG, HEIC (אייפון), WEBP, AVIF, GIF, SVG, BMP, TIFF ומצלמה",
       uploadedLabel: "התמונה שלך",
       orPresets: "או בחרו מתוך תמונות הדוגמה:",
       step3: "3. הפרטים האישיים שלכם:",
@@ -437,7 +474,7 @@ function OnboardingFormContent() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.jpg,.jpeg,.png,.apng,.webp,.avif,.heic,.heif,.gif,.svg,.bmp,.tif,.tiff,.jfif,.pjpeg,.pjp,.ico"
                   onChange={handlePhotoUpload}
                   className="hidden"
                 />
