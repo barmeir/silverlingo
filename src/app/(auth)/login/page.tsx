@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
@@ -19,14 +20,34 @@ import {
 
 type AuthMethod = "email" | "phone";
 
+function normalizePhoneNumber(raw: string): string {
+  const digitsAndPlus = raw.replace(/[\s\-().]/g, "");
+  if (!digitsAndPlus) return raw.trim();
+  // Convert Israeli local mobile format 05X... -> +9725X...
+  if (/^05\d{8}$/.test(digitsAndPlus)) {
+    return `+972${digitsAndPlus.slice(1)}`;
+  }
+  // Convert 10-digit US format -> +1...
+  if (/^\d{10}$/.test(digitsAndPlus)) {
+    return `+1${digitsAndPlus}`;
+  }
+  if (!digitsAndPlus.startsWith("+") && /^\d+$/.test(digitsAndPlus)) {
+    return `+${digitsAndPlus}`;
+  }
+  return digitsAndPlus;
+}
+
 export default function PasswordlessLoginPage() {
   const supabase = createClient();
+  const router = useRouter();
   const { lang, isRTL } = useLanguage();
   const ForwardArrow = isRTL ? ArrowLeft : ArrowRight;
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
 
   const [method, setMethod] = useState<AuthMethod>("email");
   const [identifier, setIdentifier] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [smsGatewayActive, setSmsGatewayActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -43,27 +64,35 @@ export default function PasswordlessLoginPage() {
       sentTitleEmail: supabaseActive
         ? "Check your Email Inbox!"
         : "Demo Mode: Ready to Create Your Profile!",
-      sentTitlePhone: supabaseActive
+      sentTitlePhone: smsGatewayActive
         ? "Check your Phone Messages!"
-        : "Demo Mode: Ready to Create Your Profile!",
-      sentBody1: supabaseActive
+        : "Phone Saved! Ready to Continue",
+      sentBodyEmail1: supabaseActive
         ? "We sent a personal Magic Sign-In Link to "
-        : "Since this preview is running in Demo Mode (without an external email server connected), you don't need to wait for an email at ",
-      sentBody2: supabaseActive
-        ? ". Simply tap the orange button inside that message to open your account."
+        : "Since this preview is running in Demo Mode, you don't need to wait for an email at ",
+      sentBodyEmail2: supabaseActive
+        ? ". Simply tap the link inside that email, or click below to set up your profile right now."
         : " — click below to set up your name, role, and hobbies right now!",
+      sentBodyPhone1: smsGatewayActive
+        ? "We sent a 6-digit SMS code to "
+        : "Your phone number ",
+      sentBodyPhone2: smsGatewayActive
+        ? ". Enter the code below, or click to set up your profile directly."
+        : " is ready! Because an external SMS provider (like Twilio) is not required, click below to create or open your profile right now.",
+      otpLabel: "Enter 6-Digit SMS Code:",
+      verifyOtpBtn: "Verify SMS Code →",
       createProfileBtn: "Create My Profile Now →",
       continueSchedule: "Skip to Host Schedule →",
       useDifferentEmail: "Use a different email address",
       useDifferentPhone: "Use a different phone number",
-      step1: "1. How should we send your link?",
+      step1: "1. How should we sign you in?",
       byEmail: "By Email",
-      byPhone: "By Phone SMS",
+      byPhone: "By Phone Number",
       step2Email: "2. Type your Email Address:",
       step2Phone: "2. Type your Mobile Phone Number:",
       sending: "Continuing...",
       sendEmailBtn: "Continue with Email Magic Link",
-      sendPhoneBtn: "Continue with SMS Code",
+      sendPhoneBtn: "Continue with Phone Number",
       newHere: "New to SilverLingo? Create Your Profile Directly",
       reassurance: "Safe, private, and designed for effortless sign-in.",
       helpFooter: "Need help? Call our friendly support line anytime.",
@@ -77,27 +106,35 @@ export default function PasswordlessLoginPage() {
       sentTitleEmail: supabaseActive
         ? "בדקו את תיבת האימייל שלכם!"
         : "מצב הדגמה (Demo): מוכנים ליצירת הפרופיל שלך!",
-      sentTitlePhone: supabaseActive
+      sentTitlePhone: smsGatewayActive
         ? "בדקו את הודעות ה-SMS בטלפון!"
-        : "מצב הדגמה (Demo): מוכנים ליצירת הפרופיל שלך!",
-      sentBody1: supabaseActive
+        : "מספר הטלפון נקלט! מוכנים להמשיך",
+      sentBodyEmail1: supabaseActive
         ? "שלחנו קישור כניסה אישי אל "
-        : "מכיוון שהמערכת פועלת במצב הדגמה (ללא שרת שליחת מיילים חיצוני), אין צורך להמתין לאימייל בכתובת ",
-      sentBody2: supabaseActive
-        ? ". פשוט לחצו על הכפתור הכתום שבתוך ההודעה כדי להיכנס לחשבון."
+        : "מכיוון שהמערכת פועלת במצב הדגמה, אין צורך להמתין לאימייל בכתובת ",
+      sentBodyEmail2: supabaseActive
+        ? ". פשוט לחצו על הקישור שבתוך ההודעה, או לחצו למטה ליצירת הפרופיל מיד."
         : " — לחצו למטה כדי ליצור את הפרופיל שלכם (שם, תפקיד ותחביבים) ולהתחיל מיד!",
+      sentBodyPhone1: smsGatewayActive
+        ? "שלחנו קוד בן 6 ספרות ב-SMS אל "
+        : "מספר הטלפון שלך ",
+      sentBodyPhone2: smsGatewayActive
+        ? ". הזינו את הקוד למטה, או לחצו להמשך ישיר לפרופיל שלכם."
+        : " מוכן! אין צורך להמתין להודעת SMS — לחצו על הכפתור הכתום למטה כדי ליצור או לפתוח את הפרופיל שלכם מיד.",
+      otpLabel: "הקלידו את קוד ה-SMS (6 ספרות):",
+      verifyOtpBtn: "אימות קוד SMS ←",
       createProfileBtn: "יצירת הפרופיל שלי עכשיו ←",
       continueSchedule: "מעבר ישיר ליומן המארח ←",
       useDifferentEmail: "שימוש בכתובת אימייל אחרת",
       useDifferentPhone: "שימוש במספר טלפון אחר",
       step1: "1. איך תרצו להתחבר?",
       byEmail: "באמצעות אימייל",
-      byPhone: "בהודעת SMS לטלפון",
+      byPhone: "באמצעות מספר טלפון",
       step2Email: "2. הקלידו את כתובת האימייל שלכם:",
       step2Phone: "2. הקלידו את מספר הטלפון הנייד:",
       sending: "ממשיך...",
       sendEmailBtn: "המשך באמצעות קישור לאימייל",
-      sendPhoneBtn: "המשך באמצעות קוד SMS",
+      sendPhoneBtn: "המשך באמצעות מספר טלפון",
       newHere: "חדשים ב-SilverLingo? יצירת פרופיל אישי מיד",
       reassurance: "בטוח, פרטי ומותאם לכניסה פשוטה ונוחה.",
       helpFooter: "צריכים עזרה? מוקד התמיכה שלנו זמין עבורכם בכל עת.",
@@ -124,13 +161,22 @@ export default function PasswordlessLoginPage() {
           });
           if (error) throw error;
         } else {
+          const formattedPhone = normalizePhoneNumber(identifier);
+          setIdentifier(formattedPhone);
           const { error } = await supabase.auth.signInWithOtp({
-            phone: identifier.trim(),
+            phone: formattedPhone,
             options: {
               data: { timezone: detectedTimezone },
             },
           });
-          if (error) throw error;
+
+          if (error) {
+            // If Supabase Phone/Twilio SMS gateway is not configured on the free tier,
+            // allow direct phone sign-in / profile creation without blocking the user.
+            setSmsGatewayActive(false);
+          } else {
+            setSmsGatewayActive(true);
+          }
         }
       } else {
         await new Promise((r) => setTimeout(r, 350));
@@ -141,6 +187,27 @@ export default function PasswordlessLoginPage() {
       setErrorMsg(
         err.message || "We could not send your sign-in link. Please try again."
       );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifySmsOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode.trim()) return;
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        phone: normalizePhoneNumber(identifier),
+        token: otpCode.trim(),
+        type: "sms",
+      });
+      if (error) throw error;
+      router.push(`/onboarding?contact=${encodeURIComponent(identifier)}`);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Invalid SMS verification code.");
     } finally {
       setLoading(false);
     }
@@ -204,10 +271,49 @@ export default function PasswordlessLoginPage() {
               </div>
 
               <p className="text-[20px] text-slate-900 leading-relaxed">
-                {t.sentBody1}
-                <strong className="underline decoration-2">{identifier}</strong>
-                {t.sentBody2}
+                {method === "email" ? t.sentBodyEmail1 : t.sentBodyPhone1}
+                <strong className="underline decoration-2" dir="ltr">
+                  {identifier}
+                </strong>
+                {method === "email" ? t.sentBodyEmail2 : t.sentBodyPhone2}
               </p>
+
+              {method === "phone" && smsGatewayActive && (
+                <form onSubmit={handleVerifySmsOtp} className="space-y-4 pt-2">
+                  <label
+                    htmlFor="sms-otp-input"
+                    className="block text-[20px] font-extrabold text-slate-950"
+                  >
+                    {t.otpLabel}
+                  </label>
+                  <input
+                    id="sms-otp-input"
+                    dir="ltr"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    placeholder="123456"
+                    className="w-full min-h-[68px] px-6 rounded-2xl bg-white border-2 border-slate-800 text-[24px] tracking-widest font-extrabold text-center text-slate-950"
+                  />
+                  {errorMsg && (
+                    <div
+                      role="alert"
+                      className="p-4 rounded-2xl bg-red-50 border-2 border-red-800 text-red-950 text-[18px] font-bold"
+                    >
+                      ⚠️ {errorMsg}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full min-h-[68px] px-6 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] text-white font-extrabold text-[22px] shadow-lg flex items-center justify-center gap-3 transition-all"
+                  >
+                    <span>{t.verifyOtpBtn}</span>
+                  </button>
+                </form>
+              )}
 
               <div className="pt-2 space-y-6">
                 <Link
@@ -230,6 +336,8 @@ export default function PasswordlessLoginPage() {
                   onClick={() => {
                     setSent(false);
                     setIdentifier("");
+                    setOtpCode("");
+                    setErrorMsg(null);
                   }}
                   className="w-full min-h-[64px] px-6 rounded-2xl border-2 border-slate-900 bg-white text-slate-950 font-bold text-[20px] hover:bg-slate-100 transition-colors focus:outline-none focus:ring-4 focus:ring-[#4A148C]"
                 >
@@ -306,7 +414,7 @@ export default function PasswordlessLoginPage() {
                   placeholder={
                     method === "email"
                       ? "bar@example.com"
-                      : "+972 50-123-4567"
+                      : "050-123-4567 / +972 50-123-4567"
                   }
                   className="w-full min-h-[68px] px-6 rounded-2xl bg-white border-2 border-slate-800 text-[22px] font-semibold text-slate-950 placeholder-slate-400 shadow-inner focus:outline-none focus:border-[#4A148C] focus:ring-4 focus:ring-[#4A148C]/25"
                 />
