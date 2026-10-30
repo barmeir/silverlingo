@@ -33,68 +33,123 @@ const SUPPORTED_IMAGE_EXTENSIONS =
   /\.(jpg|jpeg|png|apng|webp|avif|heic|heif|gif|svg|bmp|tif|tiff|jfif|pjpeg|pjp|ico|raw|dng)$/i;
 
 /**
- * Center-crops and optimizes an uploaded image file into a crisp 360x360 portrait.
- * Supports JPG, PNG, WEBP, AVIF, GIF, SVG, BMP, TIFF, JFIF, ICO, and HEIC/HEIF.
- * Preserves transparency for PNG/SVG/WEBP/GIF and gracefully falls back if canvas
- * decoding is unsupported for a specific container.
+ * Center-crops an image Data URL or Blob URL into a 360x360 JPEG data URL.
+ * Rejects if the browser cannot decode the image (e.g. raw HEIC in Chrome).
  */
-function resizeUploadedImage(file: File): Promise<string> {
+function cropImageSourceToSquare(src: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const size = 360;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(src);
+          return;
+        }
+
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, size, size);
+
+        const minSide = Math.min(img.width || size, img.height || size);
+        const sx = ((img.width || size) - minSide) / 2;
+        const sy = ((img.height || size) - minSide) / 2;
+
+        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+        resolve(canvas.toDataURL("image/jpeg", 0.88));
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.onerror = () => reject(new Error("Browser could not decode image"));
+    img.src = src;
+  });
+}
+
+function fileToDataURL(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const rawDataUrl = event.target?.result as string;
-      if (!rawDataUrl) {
-        reject(new Error("Empty file"));
-        return;
-      }
-
-      // Keep SVGs and animated GIFs intact as data URLs
-      if (
-        file.type === "image/svg+xml" ||
-        file.type === "image/gif" ||
-        /\.svg$/i.test(file.name)
-      ) {
-        resolve(rawDataUrl);
-        return;
-      }
-
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const size = 360;
-          const canvas = document.createElement("canvas");
-          canvas.width = size;
-          canvas.height = size;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            resolve(rawDataUrl);
-            return;
-          }
-
-          // Fill subtle light backdrop for transparent images
-          ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect(0, 0, size, size);
-
-          // Center-crop square
-          const minSide = Math.min(img.width || size, img.height || size);
-          const sx = ((img.width || size) - minSide) / 2;
-          const sy = ((img.height || size) - minSide) / 2;
-
-          ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
-          resolve(canvas.toDataURL("image/webp", 0.88));
-        } catch {
-          resolve(rawDataUrl);
-        }
-      };
-      img.onerror = () => {
-        // Fallback to raw data URL if browser cannot decode container in Canvas
-        resolve(rawDataUrl);
-      };
-      img.src = rawDataUrl;
-    };
+    reader.onload = (e) => resolve(e.target?.result as string);
     reader.onerror = () => reject(new Error("Could not read file"));
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Converts & center-crops any uploaded image (including iPhone .HEIC/.HEIF)
+ * so it displays properly in Chrome, Edge, Firefox, and Safari.
+ */
+async function resizeUploadedImage(file: File): Promise<string> {
+  const isHeic =
+    /\.(heic|heif|tif|tiff)$/i.test(file.name) ||
+    file.type === "image/heic" ||
+    file.type === "image/heif";
+
+  // Keep SVGs and GIFs intact
+  if (
+    file.type === "image/svg+xml" ||
+    file.type === "image/gif" ||
+    /\.svg$/i.test(file.name)
+  ) {
+    return fileToDataURL(file);
+  }
+
+  // If it's a HEIC/HEIF file, Chrome/Firefox cannot decode it natively in <img>.
+  // 1) Try client-side `heic2any` decoder first (works on static GitHub Pages & locally).
+  // 2) If `heic2any` fails (e.g. newer iOS 18 HEIC codec), fall back to `/api/photo-convert`.
+  if (isHeic) {
+    try {
+      const heic2anyModule = await import("heic2any");
+      const heic2any = heic2anyModule.default || heic2anyModule;
+      const converted = await heic2any({
+        blob: file,
+        toType: "image/jpeg",
+        quality: 0.88,
+      });
+      const targetBlob = Array.isArray(converted) ? converted[0] : converted;
+      const jpegDataUrl = await fileToDataURL(targetBlob);
+      return await cropImageSourceToSquare(jpegDataUrl);
+    } catch {
+      // Fallback to server-side native converter if available
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(withBasePath("/api/photo-convert"), {
+        method: "POST",
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.dataUrl) {
+          return await cropImageSourceToSquare(data.dataUrl);
+        }
+      }
+      throw new Error("Could not convert HEIC file");
+    }
+  }
+
+  // Standard image formats (JPG, PNG, WEBP, AVIF, BMP, etc.)
+  const rawDataUrl = await fileToDataURL(file);
+  try {
+    return await cropImageSourceToSquare(rawDataUrl);
+  } catch {
+    // If browser couldn't decode it directly, try `/api/photo-convert`
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(withBasePath("/api/photo-convert"), {
+      method: "POST",
+      body: formData,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.dataUrl) {
+        return await cropImageSourceToSquare(data.dataUrl);
+      }
+    }
+    throw new Error("Unsupported image encoding");
+  }
 }
 
 function OnboardingFormContent() {
@@ -122,6 +177,7 @@ function OnboardingFormContent() {
   const [customUploadedAvatar, setCustomUploadedAvatar] = useState<string | null>(
     null
   );
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [selectedHobbies, setSelectedHobbies] = useState<string[]>([
     "Football / Soccer",
     "Classic Movies & Marvel",
@@ -140,9 +196,16 @@ function OnboardingFormContent() {
       setCity(profile.city);
       setFormerRole(profile.formerRole);
       setBio(profile.bio);
-      setAvatarUrl(profile.avatarUrl);
-      if (profile.avatarUrl.startsWith("data:")) {
-        setCustomUploadedAvatar(profile.avatarUrl);
+      // Only restore custom data URL if it's a valid browser-renderable image (not raw data:image/heic)
+      if (
+        profile.avatarUrl &&
+        !profile.avatarUrl.startsWith("data:image/heic") &&
+        !profile.avatarUrl.startsWith("data:application/octet-stream")
+      ) {
+        setAvatarUrl(profile.avatarUrl);
+        if (profile.avatarUrl.startsWith("data:image/")) {
+          setCustomUploadedAvatar(profile.avatarUrl);
+        }
       }
       setSelectedHobbies(profile.hobbies);
     }
@@ -194,17 +257,24 @@ function OnboardingFormContent() {
       return;
     }
 
+    setUploadingPhoto(true);
+    setErrorMsg(null);
+
     try {
       const dataUrl = await resizeUploadedImage(file);
       setCustomUploadedAvatar(dataUrl);
       setAvatarUrl(dataUrl);
-      setErrorMsg(null);
     } catch {
       setErrorMsg(
         lang === "he"
-          ? "לא ניתן היה לטעון את התמונה. נסו תמונה אחרת."
-          : "Could not process the selected photo. Please try another image."
+          ? "לא ניתן היה להמיר את התמונה. נסו להעלות אותה שוב או לבחור תמונה אחרת."
+          : "Could not convert the selected photo. Please try again or pick another photo."
       );
+    } finally {
+      setUploadingPhoto(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -283,7 +353,9 @@ function OnboardingFormContent() {
       elderlyTitle: "👴🏼 Senior Host",
       elderlyDesc: "I am a fluent English speaker excited to chat & share stories",
       step2: "2. Choose or upload your profile photo:",
-      uploadBtn: "Upload Your Own Photo",
+      uploadBtn: uploadingPhoto
+        ? "Converting Photo..."
+        : "Upload Your Own Photo",
       uploadSub:
         "Supports all formats: JPG, PNG, HEIC (iPhone), WEBP, AVIF, GIF, SVG, BMP, TIFF & Camera",
       uploadedLabel: "Your Photo",
@@ -316,7 +388,9 @@ function OnboardingFormContent() {
       elderlyTitle: "👴🏼 מארח/ת ותיק/ה (Senior Host)",
       elderlyDesc: "אני דובר/ת אנגלית ורוצה לשוחח ולשתף סיפורי חיים",
       step2: "2. בחרו או העלו תמונת פרופיל:",
-      uploadBtn: "העלאת תמונה מהמכשיר / מצלמה",
+      uploadBtn: uploadingPhoto
+        ? "ממיר ומעבד תמונה..."
+        : "העלאת תמונה מהמכשיר / מצלמה",
       uploadSub:
         "תומך בכל סוגי התמונות: JPG, PNG, HEIC (אייפון), WEBP, AVIF, GIF, SVG, BMP, TIFF ומצלמה",
       uploadedLabel: "התמונה שלך",
@@ -481,8 +555,9 @@ function OnboardingFormContent() {
 
                 <button
                   type="button"
+                  disabled={uploadingPhoto}
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full sm:w-auto min-h-[64px] px-7 rounded-2xl bg-[#4A148C] hover:bg-[#380E6B] text-white font-extrabold text-[19px] shadow-md flex items-center justify-center gap-3 transition-all shrink-0 focus:outline-none focus:ring-4 focus:ring-[#4A148C]/40"
+                  className="w-full sm:w-auto min-h-[64px] px-7 rounded-2xl bg-[#4A148C] hover:bg-[#380E6B] text-white font-extrabold text-[19px] shadow-md flex items-center justify-center gap-3 transition-all shrink-0 focus:outline-none focus:ring-4 focus:ring-[#4A148C]/40 disabled:opacity-60"
                 >
                   <Upload className="w-6 h-6" />
                   <span>{t.uploadBtn}</span>
