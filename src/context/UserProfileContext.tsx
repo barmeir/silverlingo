@@ -52,6 +52,8 @@ export interface UserProfile {
   id: string;
   role: UserRole;
   fullName: string;
+  email?: string;
+  phone?: string;
   age: number;
   country: string;
   city: string;
@@ -72,6 +74,21 @@ interface UserProfileContextValue {
 
 const STORAGE_PROFILE_KEY = "silverlingo_user_profile";
 const STORAGE_HOSTS_KEY = "silverlingo_custom_hosts";
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function ensureValidUuid(id?: string): string {
+  if (id && UUID_REGEX.test(id)) return id;
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 const UserProfileContext = createContext<UserProfileContextValue | undefined>(
   undefined
@@ -130,15 +147,18 @@ export function UserProfileProvider({
                 id: dbUser.id,
                 role: dbUser.role,
                 fullName: dbUser.full_name,
+                email: dbUser.email || authUser.email || prev?.email,
+                phone: dbUser.phone || authUser.phone || prev?.phone,
                 age: dbUser.age || prev?.age || 16,
                 country: dbUser.country || prev?.country || "Israel",
-                city: prev?.city || "",
+                city: dbUser.city || prev?.city || "",
                 formerRole:
+                  dbUser.former_role ||
                   prev?.formerRole ||
                   (dbUser.role === "elderly"
                     ? "Native English Host"
                     : "Teen Learner"),
-                bio: prev?.bio || "",
+                bio: dbUser.bio || prev?.bio || "",
                 avatarUrl:
                   prev?.avatarUrl ||
                   (dbUser.role === "elderly"
@@ -148,7 +168,12 @@ export function UserProfileProvider({
                   hobbyNames.length > 0
                     ? hobbyNames
                     : prev?.hobbies || ["Football / Soccer"],
-                contact: authUser.email || authUser.phone || prev?.contact,
+                contact:
+                  dbUser.email ||
+                  dbUser.phone ||
+                  authUser.email ||
+                  authUser.phone ||
+                  prev?.contact,
                 timezone: dbUser.timezone || "UTC",
               };
               window.localStorage.setItem(
@@ -166,7 +191,10 @@ export function UserProfileProvider({
   }, []);
 
   const saveProfile = async (newProfile: UserProfile) => {
-    let finalProfile = { ...newProfile };
+    let finalProfile: UserProfile = {
+      ...newProfile,
+      id: ensureValidUuid(newProfile.id),
+    };
 
     if (isSupabaseConfigured()) {
       try {
@@ -179,46 +207,58 @@ export function UserProfileProvider({
           finalProfile.id = authUser.id;
         }
 
-        // Upsert user record if authenticated
-        if (authUser?.id) {
+        // First try upserting with email & phone columns (from 0002 migration)
+        const { error: extError } = await supabase.from("users").upsert({
+          id: finalProfile.id,
+          role: finalProfile.role,
+          full_name: finalProfile.fullName,
+          email: finalProfile.email || null,
+          phone: finalProfile.phone || null,
+          timezone: finalProfile.timezone,
+          age: finalProfile.age,
+          country: finalProfile.country,
+        });
+
+        if (extError) {
+          // Fallback to base columns if 0002 migration hasn't been run yet
           await supabase.from("users").upsert({
-            id: authUser.id,
+            id: finalProfile.id,
             role: finalProfile.role,
             full_name: finalProfile.fullName,
             timezone: finalProfile.timezone,
             age: finalProfile.age,
             country: finalProfile.country,
           });
+        }
 
-          // Sync hobbies in public.user_hobbies
-          const { data: allHobbies } = await supabase
-            .from("hobbies")
-            .select("id, name");
+        // Sync hobbies in public.user_hobbies
+        const { data: allHobbies } = await supabase
+          .from("hobbies")
+          .select("id, name");
 
-          if (allHobbies && allHobbies.length > 0) {
-            await supabase
-              .from("user_hobbies")
-              .delete()
-              .eq("user_id", authUser.id);
+        if (allHobbies && allHobbies.length > 0) {
+          await supabase
+            .from("user_hobbies")
+            .delete()
+            .eq("user_id", finalProfile.id);
 
-            const hobbyMappings = finalProfile.hobbies
-              .map((hName) => {
-                const match = allHobbies.find(
-                  (dbH) =>
-                    dbH.name.toLowerCase() === hName.toLowerCase() ||
-                    dbH.name.toLowerCase().includes(hName.toLowerCase())
-                );
-                return match
-                  ? { user_id: authUser.id, hobby_id: String(match.id) }
-                  : null;
-              })
-              .filter(
-                (m): m is { user_id: string; hobby_id: string } => m !== null
+          const hobbyMappings = finalProfile.hobbies
+            .map((hName) => {
+              const match = allHobbies.find(
+                (dbH) =>
+                  dbH.name.toLowerCase() === hName.toLowerCase() ||
+                  dbH.name.toLowerCase().includes(hName.toLowerCase())
               );
+              return match
+                ? { user_id: finalProfile.id, hobby_id: String(match.id) }
+                : null;
+            })
+            .filter(
+              (m): m is { user_id: string; hobby_id: string } => m !== null
+            );
 
-            if (hobbyMappings.length > 0) {
-              await supabase.from("user_hobbies").insert(hobbyMappings);
-            }
+          if (hobbyMappings.length > 0) {
+            await supabase.from("user_hobbies").insert(hobbyMappings);
           }
         }
       } catch {
@@ -259,7 +299,9 @@ export function UserProfileProvider({
 export function useUserProfile() {
   const ctx = useContext(UserProfileContext);
   if (!ctx) {
-    throw new Error("useUserProfile must be used within a UserProfileProvider");
+    throw new Error(
+      "useUserProfile must be used inside a UserProfileProvider"
+    );
   }
   return ctx;
 }

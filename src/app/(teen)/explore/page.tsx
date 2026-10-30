@@ -162,6 +162,10 @@ export default function TeenExplorePage() {
   const mappedCustomHosts: HostProfile[] = customHosts.map((ch) => ({
     id: ch.id,
     fullName: ch.fullName,
+    email: ch.email || (ch.contact?.includes("@") ? ch.contact : undefined),
+    phone:
+      ch.phone ||
+      (ch.contact && !ch.contact.includes("@") ? ch.contact : undefined),
     age: ch.age,
     country: ch.country,
     city: ch.city,
@@ -211,18 +215,26 @@ export default function TeenExplorePage() {
   const handleBooked = (bookingData: {
     meetingId: string;
     hostName: string;
+    hostEmail: string;
+    hostPhone: string;
     hostAvatar: string;
     learnerName: string;
+    learnerEmail: string;
+    learnerPhone: string;
     scheduledStartUTC: string;
     googleMeetLink: string;
     aiIcebreaker: string;
   }) => {
     const query = new URLSearchParams({
       host: bookingData.hostName,
+      hostEmail: bookingData.hostEmail,
+      hostPhone: bookingData.hostPhone,
       ...(bookingData.hostAvatar.startsWith("data:")
         ? {}
         : { hostAvatar: bookingData.hostAvatar }),
       learner: bookingData.learnerName,
+      learnerEmail: bookingData.learnerEmail,
+      learnerPhone: bookingData.learnerPhone,
       start: bookingData.scheduledStartUTC,
       meet: bookingData.googleMeetLink,
       icebreaker: bookingData.aiIcebreaker,

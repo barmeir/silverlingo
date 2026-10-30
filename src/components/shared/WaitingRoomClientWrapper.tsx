@@ -16,6 +16,20 @@ export default function WaitingRoomClientWrapper({
   const hostName = searchParams.get("host") || "Arthur Pendelton";
   const matchedCustomHost = customHosts.find((h) => h.fullName === hostName);
 
+  const hostEmail =
+    searchParams.get("hostEmail") ||
+    matchedCustomHost?.email ||
+    (matchedCustomHost?.contact?.includes("@")
+      ? matchedCustomHost.contact
+      : `${hostName.toLowerCase().replace(/\s+/g, ".")}@silverlingo.org`);
+
+  const hostPhone =
+    searchParams.get("hostPhone") ||
+    matchedCustomHost?.phone ||
+    (matchedCustomHost?.contact && !matchedCustomHost.contact.includes("@")
+      ? matchedCustomHost.contact
+      : "+1-800-555-0191");
+
   const hostAvatar =
     matchedCustomHost?.avatarUrl ||
     searchParams.get("hostAvatar") ||
@@ -24,6 +38,20 @@ export default function WaitingRoomClientWrapper({
   const learnerName =
     searchParams.get("learner") ||
     (profile?.role === "teen" ? profile.fullName : "Mateo");
+
+  const learnerEmail =
+    searchParams.get("learnerEmail") ||
+    profile?.email ||
+    (profile?.contact?.includes("@")
+      ? profile.contact
+      : "learner@silverlingo.org");
+
+  const learnerPhone =
+    searchParams.get("learnerPhone") ||
+    profile?.phone ||
+    (profile?.contact && !profile.contact.includes("@")
+      ? profile.contact
+      : "+972-50-123-4567");
 
   const learnerAvatar =
     profile?.role === "teen" && profile.avatarUrl
@@ -43,8 +71,12 @@ export default function WaitingRoomClientWrapper({
     <WaitingRoom
       key={meetingId}
       hostName={hostName}
+      hostEmail={hostEmail}
+      hostPhone={hostPhone}
       hostAvatar={hostAvatar}
       learnerName={learnerName}
+      learnerEmail={learnerEmail}
+      learnerPhone={learnerPhone}
       learnerAvatar={learnerAvatar}
       scheduledStartUTC={scheduledStartUTC}
       googleMeetLink={googleMeetLink}

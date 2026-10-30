@@ -7,6 +7,7 @@ import { formatUTCToLocalDisplay } from "@/lib/timezone";
 import { useLanguage } from "@/context/LanguageContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 import { withBasePath } from "@/lib/assets";
+import { buildParticipantMessages } from "@/lib/notifications";
 import {
   Video,
   Sparkles,
@@ -18,12 +19,18 @@ import {
   Mic,
   Volume2,
   ExternalLink,
+  Mail,
+  Smartphone,
 } from "lucide-react";
 
 interface WaitingRoomProps {
   hostName: string;
+  hostEmail?: string;
+  hostPhone?: string;
   hostAvatar?: string;
   learnerName: string;
+  learnerEmail?: string;
+  learnerPhone?: string;
   learnerAvatar?: string;
   scheduledStartUTC: string;
   googleMeetLink: string;
@@ -33,13 +40,16 @@ interface WaitingRoomProps {
 /**
  * The "Waiting Room" Screen:
  * Shared by both Elderly Hosts and Teen Learners 5 minutes before the meeting starts.
- * Supports full English & Hebrew (RTL) UI while keeping the English Icebreaker
- * prominent (with a Hebrew translation/coaching tip) so the Learner knows what to ask!
+ * Shows the SMS & Email notification dispatch status for both accounts in the meeting.
  */
 export default function WaitingRoom({
   hostName,
+  hostEmail = "arthur.host@silverlingo.org",
+  hostPhone = "+1-800-555-0191",
   hostAvatar = "/avatars/arthur.png",
   learnerName,
+  learnerEmail = "learner@silverlingo.org",
+  learnerPhone = "+972-50-123-4567",
   learnerAvatar = "/avatars/mateo.png",
   scheduledStartUTC,
   googleMeetLink,
@@ -66,6 +76,46 @@ export default function WaitingRoom({
   const minutesRemaining = Math.max(0, Math.floor(secondsUntilStart / 60));
   const secondsRemaining = Math.max(0, secondsUntilStart % 60);
 
+  const hostMsgs = buildParticipantMessages(
+    {
+      id: "host",
+      name: hostName,
+      role: "elderly",
+      email: hostEmail,
+      phone: hostPhone,
+    },
+    {
+      id: "learner",
+      name: learnerName,
+      role: "teen",
+      email: learnerEmail,
+      phone: learnerPhone,
+    },
+    scheduledStartUTC,
+    googleMeetLink,
+    aiIcebreaker
+  );
+
+  const learnerMsgs = buildParticipantMessages(
+    {
+      id: "learner",
+      name: learnerName,
+      role: "teen",
+      email: learnerEmail,
+      phone: learnerPhone,
+    },
+    {
+      id: "host",
+      name: hostName,
+      role: "elderly",
+      email: hostEmail,
+      phone: hostPhone,
+    },
+    scheduledStartUTC,
+    googleMeetLink,
+    aiIcebreaker
+  );
+
   const t = {
     en: {
       backExplore: "Back to Explore",
@@ -80,6 +130,13 @@ export default function WaitingRoom({
       icebreakerTitle: "Your AI Icebreaker Question",
       icebreakerTip:
         "💡 Tip: Start your call by asking this question in English to break the ice right away!",
+      notifHeader: "SMS & Email Notifications Sent to Both Accounts",
+      notifSub:
+        "Logged in DB (meeting_notifications) for both participants:",
+      hostRoleLabel: "Senior Host",
+      learnerRoleLabel: "Teen Learner",
+      sendSmsBtn: "Send SMS",
+      sendEmailBtn: "Send Email",
       micReady: "Microphone & Camera Ready",
       roomReady: "Private Google Meet Room Created",
       joinBtn: "Join Video Call",
@@ -101,6 +158,12 @@ export default function WaitingRoom({
       icebreakerTitle: "שאלת שבירת הקרח שלך (AI Icebreaker)",
       icebreakerTip:
         "💡 טיפ: פתחו את השיחה בשאלה הזו באנגלית כדי לשבור את הקרח מיד בהתחלה!",
+      notifHeader: "הודעות SMS ואימייל נשלחו לשני המשתתפים בשיחה",
+      notifSub: "נרשם בטבלת מסד הנתונים (meeting_notifications) עבור שני החשבונות:",
+      hostRoleLabel: "מארח/ת",
+      learnerRoleLabel: "תלמיד/ה",
+      sendSmsBtn: "שליחת SMS",
+      sendEmailBtn: "שליחת אימייל",
       micReady: "מיקרופון ומצלמה מוכנים",
       roomReady: "חדר Google Meet פרטי נוצר עבורכם",
       joinBtn: "הצטרפות לשיחת הווידאו",
@@ -195,6 +258,110 @@ export default function WaitingRoom({
               </div>
             </div>
           </div>
+
+          {/* SMS & Email Notification Status Box for BOTH Accounts */}
+          <section
+            aria-label={t.notifHeader}
+            className="bg-emerald-50 border-2 border-emerald-700 rounded-3xl p-6 space-y-4"
+          >
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-7 h-7 text-emerald-700 shrink-0" />
+              <div>
+                <h2 className="text-[21px] font-extrabold text-emerald-950">
+                  {t.notifHeader}
+                </h2>
+                <p className="text-[16px] text-emerald-900 font-medium">
+                  {t.notifSub}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              {/* Host Notification Card */}
+              <div className="bg-white rounded-2xl p-4 border border-emerald-300 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-[18px] text-slate-950">
+                    {hostName}
+                  </span>
+                  <span className="text-xs font-bold uppercase px-2.5 py-0.5 rounded-full bg-purple-100 text-[#4A148C]">
+                    {t.hostRoleLabel}
+                  </span>
+                </div>
+                <div className="text-[15px] text-slate-800 space-y-1">
+                  <div className="flex items-center gap-2" dir="ltr">
+                    <Smartphone className="w-4 h-4 text-emerald-700 shrink-0" />
+                    <span className="font-semibold">{hostPhone}</span>
+                  </div>
+                  <div className="flex items-center gap-2" dir="ltr">
+                    <Mail className="w-4 h-4 text-[#4A148C] shrink-0" />
+                    <span className="font-semibold truncate">{hostEmail}</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <a
+                    href={`sms:${hostPhone}?body=${encodeURIComponent(
+                      hostMsgs.smsBody
+                    )}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold transition-colors"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>{t.sendSmsBtn}</span>
+                  </a>
+                  <a
+                    href={`mailto:${hostEmail}?subject=${encodeURIComponent(
+                      hostMsgs.emailSubject
+                    )}&body=${encodeURIComponent(hostMsgs.emailBody)}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#4A148C] hover:bg-[#380E6B] text-white text-sm font-bold transition-colors"
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>{t.sendEmailBtn}</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* Learner Notification Card */}
+              <div className="bg-white rounded-2xl p-4 border border-emerald-300 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-[18px] text-slate-950">
+                    {learnerName}
+                  </span>
+                  <span className="text-xs font-bold uppercase px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-900">
+                    {t.learnerRoleLabel}
+                  </span>
+                </div>
+                <div className="text-[15px] text-slate-800 space-y-1">
+                  <div className="flex items-center gap-2" dir="ltr">
+                    <Smartphone className="w-4 h-4 text-emerald-700 shrink-0" />
+                    <span className="font-semibold">{learnerPhone}</span>
+                  </div>
+                  <div className="flex items-center gap-2" dir="ltr">
+                    <Mail className="w-4 h-4 text-[#4A148C] shrink-0" />
+                    <span className="font-semibold truncate">{learnerEmail}</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <a
+                    href={`sms:${learnerPhone}?body=${encodeURIComponent(
+                      learnerMsgs.smsBody
+                    )}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold transition-colors"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>{t.sendSmsBtn}</span>
+                  </a>
+                  <a
+                    href={`mailto:${learnerEmail}?subject=${encodeURIComponent(
+                      learnerMsgs.emailSubject
+                    )}&body=${encodeURIComponent(learnerMsgs.emailBody)}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#4A148C] hover:bg-[#380E6B] text-white text-sm font-bold transition-colors"
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>{t.sendEmailBtn}</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </section>
 
           {/* AI-Generated Icebreaker Spotlight Box */}
           <section

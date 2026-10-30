@@ -163,9 +163,13 @@ function OnboardingFormContent() {
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
 
   const initialContact = searchParams.get("contact") || "";
+  const isInitialEmail = initialContact.includes("@");
+  const isInitialPhone = Boolean(initialContact && !isInitialEmail);
 
   const [role, setRole] = useState<UserRole>("teen");
   const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState(isInitialEmail ? initialContact : "");
+  const [phone, setPhone] = useState(isInitialPhone ? initialContact : "");
   const [age, setAge] = useState<string>("16");
   const [country, setCountry] = useState("Israel");
   const [city, setCity] = useState("Tel Aviv");
@@ -191,6 +195,11 @@ function OnboardingFormContent() {
     if (profile) {
       setRole(profile.role);
       setFullName(profile.fullName);
+      if (profile.email) setEmail(profile.email);
+      else if (profile.contact?.includes("@")) setEmail(profile.contact);
+      if (profile.phone) setPhone(profile.phone);
+      else if (profile.contact && !profile.contact.includes("@"))
+        setPhone(profile.contact);
       setAge(String(profile.age));
       setCountry(profile.country);
       setCity(profile.city);
@@ -317,6 +326,8 @@ function OnboardingFormContent() {
         id: profile?.id || `user-${Date.now()}`,
         role,
         fullName: fullName.trim(),
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
         age: Number(age) || (role === "elderly" ? 70 : 16),
         country: country.trim() || "Israel",
         city: city.trim() || "Tel Aviv",
@@ -326,7 +337,8 @@ function OnboardingFormContent() {
         bio: bio.trim(),
         avatarUrl,
         hobbies: selectedHobbies,
-        contact: initialContact || profile?.contact,
+        contact:
+          email.trim() || phone.trim() || initialContact || profile?.contact,
         timezone: tz,
       });
 
@@ -360,9 +372,13 @@ function OnboardingFormContent() {
         "Supports all formats: JPG, PNG, HEIC (iPhone), WEBP, AVIF, GIF, SVG, BMP, TIFF & Camera",
       uploadedLabel: "Your Photo",
       orPresets: "Or choose a preset portrait:",
-      step3: "3. Your Details:",
+      step3: "3. Your Details & Notification Contacts:",
       nameLabel: "Full Name",
       namePlaceholder: "e.g., Bar Meir",
+      emailLabel: "Email Address (for Meeting Invites)",
+      emailPlaceholder: "bar@example.com",
+      phoneLabel: "Mobile Phone Number (for SMS Reminders)",
+      phonePlaceholder: "+972 50-123-4567",
       ageLabel: "Age",
       countryLabel: "Country",
       cityLabel: "City",
@@ -395,9 +411,13 @@ function OnboardingFormContent() {
         "תומך בכל סוגי התמונות: JPG, PNG, HEIC (אייפון), WEBP, AVIF, GIF, SVG, BMP, TIFF ומצלמה",
       uploadedLabel: "התמונה שלך",
       orPresets: "או בחרו מתוך תמונות הדוגמה:",
-      step3: "3. הפרטים האישיים שלכם:",
+      step3: "3. הפרטים האישיים ופרטי קשר להתראות:",
       nameLabel: "שם מלא",
       namePlaceholder: "לדוגמה: בר מאיר",
+      emailLabel: "כתובת אימייל (לקבלת זימון לפגישה)",
+      emailPlaceholder: "bar@example.com",
+      phoneLabel: "מספר טלפון נייד (לקבלת הודעת SMS לפני השיחה)",
+      phonePlaceholder: "050-123-4567",
       ageLabel: "גיל",
       countryLabel: "מדינה",
       cityLabel: "עיר",
@@ -653,6 +673,38 @@ function OnboardingFormContent() {
                     value={age}
                     onChange={(e) => setAge(e.target.value)}
                     className="w-full min-h-[60px] px-5 rounded-2xl bg-white border-2 border-slate-700 text-[20px] font-semibold text-slate-950 focus:outline-none focus:border-[#4A148C] focus:ring-4 focus:ring-[#4A148C]/20"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="block text-[18px] font-bold text-slate-900">
+                    {t.emailLabel} *
+                  </label>
+                  <input
+                    dir="ltr"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={t.emailPlaceholder}
+                    className="w-full min-h-[60px] px-5 rounded-2xl bg-white border-2 border-slate-700 text-[19px] font-semibold text-slate-950 focus:outline-none focus:border-[#4A148C] focus:ring-4 focus:ring-[#4A148C]/20"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-[18px] font-bold text-slate-900">
+                    {t.phoneLabel} *
+                  </label>
+                  <input
+                    dir="ltr"
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder={t.phonePlaceholder}
+                    className="w-full min-h-[60px] px-5 rounded-2xl bg-white border-2 border-slate-700 text-[19px] font-semibold text-slate-950 focus:outline-none focus:border-[#4A148C] focus:ring-4 focus:ring-[#4A148C]/20"
                   />
                 </div>
               </div>

@@ -3,7 +3,12 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
+import { useUserProfile } from "@/context/UserProfileContext";
 import { withBasePath } from "@/lib/assets";
+import {
+  resolveParticipantsFromDB,
+  logNotificationsToSupabase,
+} from "@/lib/notifications";
 import {
   Sparkles,
   MapPin,
@@ -24,6 +29,8 @@ export interface HostProfile {
   id: string;
   fullName: string;
   fullNameHe?: string;
+  email?: string;
+  phone?: string;
   age: number;
   country: string;
   countryHe?: string;
@@ -48,8 +55,12 @@ interface HostCardProps {
   onBooked: (bookingData: {
     meetingId: string;
     hostName: string;
+    hostEmail: string;
+    hostPhone: string;
     hostAvatar: string;
     learnerName: string;
+    learnerEmail: string;
+    learnerPhone: string;
     scheduledStartUTC: string;
     googleMeetLink: string;
     aiIcebreaker: string;
@@ -94,6 +105,7 @@ export default function HostCard({
   onBooked,
 }: HostCardProps) {
   const { lang, isRTL } = useLanguage();
+  const { profile } = useUserProfile();
   const DirectionalArrow = isRTL ? ArrowLeft : ArrowRight;
 
   const [selectedSlot, setSelectedSlot] = useState<HostSlot | null>(
@@ -136,6 +148,33 @@ export default function HostCard({
         host.fullName.split(" ")[0]
       } what first sparked their love for ${sharedHobby}!`;
 
+      // Resolve email & phone for both accounts from Supabase DB table (public.users) + profile
+      const participants = await resolveParticipantsFromDB({
+        hostId: host.id,
+        hostName: host.fullName,
+        hostEmail:
+          host.email ||
+          `${host.fullName.toLowerCase().replace(/\s+/g, ".")}@silverlingo.org`,
+        hostPhone: host.phone || "+1-800-555-0191",
+        learnerId: profile?.id || "00000000-0000-0000-0000-000000000002",
+        learnerName,
+        learnerEmail:
+          profile?.email ||
+          (profile?.contact?.includes("@")
+            ? profile.contact
+            : "learner@silverlingo.org"),
+        learnerPhone:
+          profile?.phone ||
+          (profile?.contact && !profile.contact.includes("@")
+            ? profile.contact
+            : "+972-50-123-4567"),
+      });
+
+      let hostEmail = participants.host.email;
+      let hostPhone = participants.host.phone;
+      let learnerEmail = participants.learner.email;
+      let learnerPhone = participants.learner.phone;
+
       try {
         const response = await fetch(withBasePath("/api/meetings/book"), {
           method: "POST",
@@ -143,8 +182,13 @@ export default function HostCard({
           body: JSON.stringify({
             hostId: host.id,
             hostName: host.fullName,
+            hostEmail,
+            hostPhone,
             hostHobbies: host.hobbies.map((h) => h.name),
+            learnerId: participants.learner.id,
             learnerName,
+            learnerEmail,
+            learnerPhone,
             learnerHobbies,
             scheduledStartUTC: selectedSlot.utcStartISO,
           }),
@@ -156,17 +200,43 @@ export default function HostCard({
           scheduledStart = data.meeting.scheduled_start;
           googleMeetLink = data.meeting.google_meet_link;
           aiIcebreaker = data.meeting.ai_icebreaker;
+          if (data.hostEmail) hostEmail = data.hostEmail;
+          if (data.hostPhone) hostPhone = data.hostPhone;
+          if (data.learnerEmail) learnerEmail = data.learnerEmail;
+          if (data.learnerPhone) learnerPhone = data.learnerPhone;
         }
       } catch {
-        // Static GitHub Pages fallback: simulate brief booking latency
-        await new Promise((r) => setTimeout(r, 450));
+        // Static deployment fallback
+        await new Promise((r) => setTimeout(r, 350));
       }
+
+      // Log SMS & Email notifications for BOTH accounts into Supabase public.meeting_notifications
+      await logNotificationsToSupabase({
+        meetingId,
+        host: {
+          ...participants.host,
+          email: hostEmail,
+          phone: hostPhone,
+        },
+        learner: {
+          ...participants.learner,
+          email: learnerEmail,
+          phone: learnerPhone,
+        },
+        scheduledStartUTC: scheduledStart,
+        googleMeetLink,
+        aiIcebreaker,
+      });
 
       onBooked({
         meetingId,
         hostName: host.fullName,
+        hostEmail,
+        hostPhone,
         hostAvatar: host.avatarUrl,
         learnerName,
+        learnerEmail,
+        learnerPhone,
         scheduledStartUTC: scheduledStart,
         googleMeetLink,
         aiIcebreaker,
