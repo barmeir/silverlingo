@@ -21,17 +21,47 @@ export interface HobbyOption {
 export const PREDEFINED_HOBBIES: HobbyOption[] = [
   { id: "football", name: "Football / Soccer", nameHe: "כדורגל", icon: "⚽" },
   {
+    id: "basketball",
+    name: "Basketball & NBA",
+    nameHe: "כדורסל ו-NBA",
+    icon: "🏀",
+  },
+  {
+    id: "tennis",
+    name: "Tennis & Pickleball",
+    nameHe: "טניס ופאדל",
+    icon: "🎾",
+  },
+  {
     id: "marvel",
     name: "Classic Movies & Marvel",
     nameHe: "קולנוע ומארוול",
     icon: "🎬",
   },
+  {
+    id: "tv-anime",
+    name: "TV Shows & Anime",
+    nameHe: "סדרות טלוויזיה ואנימה",
+    icon: "📺",
+  },
   { id: "music", name: "Music & Vinyl", nameHe: "מוזיקה ותקליטים", icon: "🎸" },
+  {
+    id: "instruments",
+    name: "Playing Musical Instruments",
+    nameHe: "נגינה על כלי נגינה",
+    icon: "🎹",
+  },
   {
     id: "baking",
     name: "Baking & Cooking",
     nameHe: "אפייה ובישול",
     icon: "🥐",
+  },
+  {
+    id: "coffee",
+    name: "Coffee, Tea & Cafes",
+    nameHe: "קפה, תה ובתי קפה",
+    icon: "☕",
   },
   {
     id: "history",
@@ -45,12 +75,78 @@ export const PREDEFINED_HOBBIES: HobbyOption[] = [
     nameHe: "שחמט ומשחקי קופסה",
     icon: "♟️",
   },
-  { id: "gardening", name: "Gardening", nameHe: "גינון", icon: "🌻" },
+  {
+    id: "gaming",
+    name: "Video Games & Gaming",
+    nameHe: "משחקי וידאו וגיימינג",
+    icon: "🎮",
+  },
+  { id: "gardening", name: "Gardening", nameHe: "גינון וצמחים", icon: "🌻" },
   {
     id: "travel",
     name: "Travel Stories",
     nameHe: "סיפורי טיולים",
     icon: "✈️",
+  },
+  {
+    id: "books",
+    name: "Books & Literature",
+    nameHe: "ספרים וקריאה",
+    icon: "📚",
+  },
+  {
+    id: "pets",
+    name: "Dogs, Cats & Pets",
+    nameHe: "כלבים, חתולים וחיות מחמד",
+    icon: "🐶",
+  },
+  {
+    id: "photography",
+    name: "Photography & Art",
+    nameHe: "צילום ואמנות",
+    icon: "📷",
+  },
+  {
+    id: "painting",
+    name: "Painting, Drawing & Crafts",
+    nameHe: "ציור, איור ויצירה",
+    icon: "🎨",
+  },
+  {
+    id: "science",
+    name: "Science, Space & Astronomy",
+    nameHe: "מדע, חלל ואסטרונומיה",
+    icon: "🔬",
+  },
+  {
+    id: "tech",
+    name: "Technology & AI",
+    nameHe: "טכנולוגיה ו-AI",
+    icon: "💻",
+  },
+  {
+    id: "hiking",
+    name: "Hiking, Camping & Nature",
+    nameHe: "טיולי טבע וקמפינג",
+    icon: "🥾",
+  },
+  {
+    id: "fitness",
+    name: "Fitness, Running & Yoga",
+    nameHe: "כושר, ריצה ויוגה",
+    icon: "🏃",
+  },
+  {
+    id: "cars",
+    name: "Classic Cars & Motorsports",
+    nameHe: "רכבי אספנות וספורט מוטורי",
+    icon: "🚗",
+  },
+  {
+    id: "theater",
+    name: "Theater, Comedy & Podcasts",
+    nameHe: "תיאטרון, קומדיה ופודקאסטים",
+    icon: "🎭",
   },
 ];
 

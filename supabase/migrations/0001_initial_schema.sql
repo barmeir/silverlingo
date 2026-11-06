@@ -55,12 +55,28 @@ CREATE TABLE IF NOT EXISTS public.hobbies (
 -- Seed predefined hobbies (Idempotent via ON CONFLICT DO NOTHING)
 INSERT INTO public.hobbies (name, icon, category) VALUES
   ('Baking & Cooking', '🥐', 'Food'),
+  ('Coffee, Tea & Cafes', '☕', 'Food'),
   ('Football / Soccer', '⚽', 'Sports'),
+  ('Basketball & NBA', '🏀', 'Sports'),
+  ('Tennis & Pickleball', '🎾', 'Sports'),
+  ('Fitness, Running & Yoga', '🏃', 'Sports'),
   ('World History', '🏛️', 'Culture'),
+  ('Books & Literature', '📚', 'Culture'),
+  ('Theater, Comedy & Podcasts', '🎭', 'Culture'),
   ('Gardening', '🌻', 'Nature'),
+  ('Hiking, Camping & Nature', '🥾', 'Nature'),
+  ('Dogs, Cats & Pets', '🐶', 'Nature'),
   ('Classic Movies & Marvel', '🎬', 'Entertainment'),
-  ('Music & Vinyl', '🎸', 'Arts'),
+  ('TV Shows & Anime', '📺', 'Entertainment'),
+  ('Video Games & Gaming', '🎮', 'Games'),
   ('Board Games & Chess', '♟️', 'Games'),
+  ('Music & Vinyl', '🎸', 'Arts'),
+  ('Playing Musical Instruments', '🎹', 'Arts'),
+  ('Photography & Art', '📷', 'Arts'),
+  ('Painting, Drawing & Crafts', '🎨', 'Arts'),
+  ('Science, Space & Astronomy', '🔬', 'Science'),
+  ('Technology & AI', '💻', 'Technology'),
+  ('Classic Cars & Motorsports', '🚗', 'Lifestyle'),
   ('Travel Stories', '✈️', 'Lifestyle')
 ON CONFLICT (name) DO NOTHING;
 

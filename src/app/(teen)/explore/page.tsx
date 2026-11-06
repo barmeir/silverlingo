@@ -614,31 +614,11 @@ export default function TeenExplorePage() {
         </span>
         {[
           { id: "All", en: "All", he: "הכל" },
-          {
-            id: "Football / Soccer",
-            en: "⚽ Football / Soccer",
-            he: "⚽ כדורגל",
-          },
-          {
-            id: "Classic Movies & Marvel",
-            en: "🎬 Classic Movies & Marvel",
-            he: "🎬 קולנוע ומארוול",
-          },
-          {
-            id: "Music & Vinyl",
-            en: "🎸 Music & Vinyl",
-            he: "🎸 מוזיקה ותקליטים",
-          },
-          {
-            id: "Baking & Cooking",
-            en: "🥐 Baking & Cooking",
-            he: "🥐 אפייה ובישול",
-          },
-          {
-            id: "Board Games & Chess",
-            en: "♟️ Board Games & Chess",
-            he: "♟️ שחמט ומשחקי קופסה",
-          },
+          ...PREDEFINED_HOBBIES.map((hb) => ({
+            id: hb.name,
+            en: `${hb.icon} ${hb.name}`,
+            he: `${hb.icon} ${hb.nameHe}`,
+          })),
         ].map((item) => {
           const active = selectedHobbyFilter === item.id;
           return (

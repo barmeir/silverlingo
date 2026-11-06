@@ -175,6 +175,7 @@ function OnboardingFormContent() {
     "Classic Movies & Marvel",
     "Music & Vinyl",
   ]);
+  const [customHobbyInput, setCustomHobbyInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [nowPreview, setNowPreview] = useState<string>("");
@@ -1101,12 +1102,18 @@ function OnboardingFormContent() {
             </div>
 
             {/* Step 5: Hobbies Selection */}
-            <div className="space-y-3">
-              <label className="block text-lg sm:text-[21px] font-extrabold text-slate-950">
-                {t.step5Hobbies}
-              </label>
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="block text-lg sm:text-[21px] font-extrabold text-slate-950">
+                  {t.step5Hobbies}
+                </label>
+                <span className="px-3 py-1 rounded-full bg-purple-100 text-[#4A148C] text-xs sm:text-sm font-extrabold">
+                  {selectedHobbies.length}{" "}
+                  {lang === "he" ? "נבחרו" : "Selected"}
+                </span>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {PREDEFINED_HOBBIES.map((hobby) => {
                   const isSelected = selectedHobbies.includes(hobby.name);
                   return (
@@ -1115,14 +1122,14 @@ function OnboardingFormContent() {
                       type="button"
                       onClick={() => toggleHobby(hobby.name)}
                       aria-pressed={isSelected}
-                      className={`min-h-[56px] px-4 py-2.5 rounded-2xl border-2 font-extrabold text-base sm:text-[17px] transition-all flex items-center justify-between gap-2 ${
+                      className={`min-h-[54px] px-4 py-2.5 rounded-2xl border-2 font-extrabold text-sm sm:text-base transition-all flex items-center justify-between gap-2 ${
                         isSelected
                           ? "bg-[#4A148C] text-white border-[#4A148C] shadow-md"
                           : "bg-white text-slate-900 border-slate-300 hover:border-slate-700"
                       }`}
                     >
                       <span className="flex items-center gap-2 truncate">
-                        <span className="text-xl">{hobby.icon}</span>
+                        <span className="text-xl shrink-0">{hobby.icon}</span>
                         <span className="truncate">
                           {lang === "he" ? hobby.nameHe : hobby.name}
                         </span>
@@ -1131,6 +1138,65 @@ function OnboardingFormContent() {
                     </button>
                   );
                 })}
+
+                {/* Also render any custom user-added hobbies */}
+                {selectedHobbies
+                  .filter(
+                    (hName) => !PREDEFINED_HOBBIES.some((p) => p.name === hName)
+                  )
+                  .map((customHobby) => (
+                    <button
+                      key={customHobby}
+                      type="button"
+                      onClick={() => toggleHobby(customHobby)}
+                      aria-pressed={true}
+                      className="min-h-[54px] px-4 py-2.5 rounded-2xl border-2 font-extrabold text-sm sm:text-base bg-[#4A148C] text-white border-[#4A148C] shadow-md flex items-center justify-between gap-2"
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <span className="text-xl shrink-0">✨</span>
+                        <span className="truncate">{customHobby}</span>
+                      </span>
+                      <Check className="w-5 h-5 shrink-0" />
+                    </button>
+                  ))}
+              </div>
+
+              {/* Add Custom Hobby Row */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
+                <input
+                  type="text"
+                  value={customHobbyInput}
+                  onChange={(e) => setCustomHobbyInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const val = customHobbyInput.trim();
+                      if (val && !selectedHobbies.includes(val)) {
+                        setSelectedHobbies((prev) => [...prev, val]);
+                      }
+                      setCustomHobbyInput("");
+                    }
+                  }}
+                  placeholder={
+                    lang === "he"
+                      ? "רוצים להוסיף תחביב נוסף? הקלידו כאן..."
+                      : "Want to add another hobby? Type it here..."
+                  }
+                  className="flex-1 min-h-[52px] px-4 rounded-2xl bg-white border-2 border-slate-400 text-base font-semibold text-slate-950 focus:outline-none focus:border-[#4A148C]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const val = customHobbyInput.trim();
+                    if (val && !selectedHobbies.includes(val)) {
+                      setSelectedHobbies((prev) => [...prev, val]);
+                    }
+                    setCustomHobbyInput("");
+                  }}
+                  className="min-h-[52px] px-5 rounded-2xl bg-purple-100 hover:bg-purple-200 border-2 border-[#4A148C] text-[#4A148C] font-extrabold text-base shrink-0"
+                >
+                  {lang === "he" ? "+ הוספת תחביב" : "+ Add Hobby"}
+                </button>
               </div>
             </div>
 
