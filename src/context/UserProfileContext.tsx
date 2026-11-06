@@ -2,6 +2,12 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { resolveTimezoneForLocation } from "@/lib/location-timezone";
+import {
+  logNotificationsToSupabase,
+  resolveParticipantsFromDB,
+  type DispatchedNotificationRecord,
+} from "@/lib/notifications";
 
 export type UserRole = "elderly" | "teen";
 
@@ -53,32 +59,71 @@ export interface UserProfile {
   role: UserRole;
   fullName: string;
   email?: string;
+  phoneCountryCode?: string;
+  phoneNational?: string;
   phone?: string;
   age: number;
   country: string;
+  usState?: string;
   city: string;
   formerRole: string;
   bio: string;
   avatarUrl: string;
-  hobbies: string[]; // Array of hobby `name` strings
+  hobbies: string[];
   contact?: string;
   timezone: string;
+}
+
+export interface ScheduledMeeting {
+  id: string;
+  hostId: string;
+  hostName: string;
+  hostEmail: string;
+  hostPhone: string;
+  hostTimezone: string;
+  hostAvatar: string;
+  learnerId: string;
+  learnerName: string;
+  learnerEmail: string;
+  learnerPhone: string;
+  learnerTimezone: string;
+  learnerAvatar: string;
+  scheduledStartUTC: string;
+  scheduledEndUTC: string;
+  googleMeetLink: string;
+  aiIcebreaker: string;
+  status: "scheduled" | "cancelled";
+  updatedAt: string;
 }
 
 interface UserProfileContextValue {
   profile: UserProfile | null;
   customHosts: UserProfile[];
-  saveProfile: (newProfile: UserProfile) => Promise<void>;
+  meetings: ScheduledMeeting[];
+  notifications: DispatchedNotificationRecord[];
+  saveProfile: (newProfile: UserProfile) => Promise<UserProfile>;
+  identifyExistingUser: (params: {
+    email?: string;
+    phoneE164?: string;
+  }) => Promise<UserProfile | null>;
+  recordMeetingBooked: (meeting: ScheduledMeeting) => Promise<void>;
+  rescheduleMeeting: (
+    meetingId: string,
+    newScheduledStartUTC: string
+  ) => Promise<ScheduledMeeting | null>;
+  cancelMeeting: (meetingId: string) => Promise<ScheduledMeeting | null>;
   clearProfile: () => void;
 }
 
 const STORAGE_PROFILE_KEY = "silverlingo_user_profile";
 const STORAGE_HOSTS_KEY = "silverlingo_custom_hosts";
+const STORAGE_MEETINGS_KEY = "silverlingo_scheduled_meetings";
+const STORAGE_NOTIFS_KEY = "silverlingo_notification_log";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function ensureValidUuid(id?: string): string {
+export function ensureValidUuid(id?: string): string {
   if (id && UUID_REGEX.test(id)) return id;
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -101,6 +146,10 @@ export function UserProfileProvider({
 }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [customHosts, setCustomHosts] = useState<UserProfile[]>([]);
+  const [meetings, setMeetings] = useState<ScheduledMeeting[]>([]);
+  const [notifications, setNotifications] = useState<
+    DispatchedNotificationRecord[]
+  >([]);
 
   useEffect(() => {
     try {
@@ -112,13 +161,64 @@ export function UserProfileProvider({
       if (savedHosts) {
         setCustomHosts(JSON.parse(savedHosts));
       }
+      const savedMeetings = window.localStorage.getItem(STORAGE_MEETINGS_KEY);
+      if (savedMeetings) {
+        setMeetings(JSON.parse(savedMeetings));
+      }
+      const savedNotifs = window.localStorage.getItem(STORAGE_NOTIFS_KEY);
+      if (savedNotifs) {
+        setNotifications(JSON.parse(savedNotifs));
+      }
     } catch {
       // Ignore storage parse errors
     }
 
-    // If Supabase is configured and user has an active session, sync profile from DB
     if (isSupabaseConfigured()) {
       const supabase = createClient();
+
+      // Fetch any Senior Hosts registered in Supabase public.users
+      supabase
+        .from("users")
+        .select("*")
+        .eq("role", "elderly")
+        .order("created_at", { ascending: false })
+        .limit(20)
+        .then(({ data: dbHosts }) => {
+          if (dbHosts && dbHosts.length > 0) {
+            setCustomHosts((prev) => {
+              const byId = new Map<string, UserProfile>();
+              prev.forEach((h) => byId.set(h.id, h));
+              dbHosts.forEach((row: any) => {
+                if (!byId.has(row.id)) {
+                  byId.set(row.id, {
+                    id: row.id,
+                    role: "elderly",
+                    fullName: row.full_name,
+                    email: row.email || undefined,
+                    phone: row.phone || undefined,
+                    age: row.age || 72,
+                    country: row.country || "United States",
+                    city: row.city || "New York",
+                    formerRole: row.former_role || "Native English Speaker",
+                    bio:
+                      row.bio ||
+                      "Excited to chat with learners over shared hobbies!",
+                    avatarUrl: row.avatar_url || "/avatars/arthur.png",
+                    hobbies: ["Football / Soccer", "Classic Movies & Marvel"],
+                    timezone: row.timezone || "America/New_York",
+                  });
+                }
+              });
+              const merged = Array.from(byId.values());
+              window.localStorage.setItem(
+                STORAGE_HOSTS_KEY,
+                JSON.stringify(merged)
+              );
+              return merged;
+            });
+          }
+        }, () => {});
+
       supabase.auth
         .getUser()
         .then(async ({ data }) => {
@@ -149,8 +249,11 @@ export function UserProfileProvider({
                 fullName: dbUser.full_name,
                 email: dbUser.email || authUser.email || prev?.email,
                 phone: dbUser.phone || authUser.phone || prev?.phone,
+                phoneCountryCode: prev?.phoneCountryCode || "+1",
+                phoneNational: prev?.phoneNational || "",
                 age: dbUser.age || prev?.age || 16,
-                country: dbUser.country || prev?.country || "Israel",
+                country: dbUser.country || prev?.country || "United States",
+                usState: prev?.usState,
                 city: dbUser.city || prev?.city || "",
                 formerRole:
                   dbUser.former_role ||
@@ -160,6 +263,7 @@ export function UserProfileProvider({
                     : "Teen Learner"),
                 bio: dbUser.bio || prev?.bio || "",
                 avatarUrl:
+                  dbUser.avatar_url ||
                   prev?.avatarUrl ||
                   (dbUser.role === "elderly"
                     ? "/avatars/arthur.png"
@@ -174,7 +278,12 @@ export function UserProfileProvider({
                   authUser.email ||
                   authUser.phone ||
                   prev?.contact,
-                timezone: dbUser.timezone || "UTC",
+                timezone:
+                  dbUser.timezone ||
+                  resolveTimezoneForLocation(
+                    dbUser.country || "United States",
+                    prev?.usState
+                  ),
               };
               window.localStorage.setItem(
                 STORAGE_PROFILE_KEY,
@@ -184,16 +293,20 @@ export function UserProfileProvider({
             });
           }
         })
-        .catch(() => {
-          // Ignore unauthenticated session
-        });
+        .catch(() => {});
     }
   }, []);
 
-  const saveProfile = async (newProfile: UserProfile) => {
+  const saveProfile = async (newProfile: UserProfile): Promise<UserProfile> => {
+    const computedTz = resolveTimezoneForLocation(
+      newProfile.country,
+      newProfile.usState
+    );
+
     let finalProfile: UserProfile = {
       ...newProfile,
       id: ensureValidUuid(newProfile.id),
+      timezone: computedTz,
     };
 
     if (isSupabaseConfigured()) {
@@ -207,7 +320,6 @@ export function UserProfileProvider({
           finalProfile.id = authUser.id;
         }
 
-        // First try upserting with email & phone columns (from 0002 migration)
         const { error: extError } = await supabase.from("users").upsert({
           id: finalProfile.id,
           role: finalProfile.role,
@@ -217,10 +329,17 @@ export function UserProfileProvider({
           timezone: finalProfile.timezone,
           age: finalProfile.age,
           country: finalProfile.country,
+          city: finalProfile.usState
+            ? `${finalProfile.city}, ${finalProfile.usState}`
+            : finalProfile.city,
+          former_role: finalProfile.formerRole,
+          bio: finalProfile.bio,
+          avatar_url: finalProfile.avatarUrl.startsWith("data:")
+            ? "/avatars/mateo.png"
+            : finalProfile.avatarUrl,
         });
 
         if (extError) {
-          // Fallback to base columns if 0002 migration hasn't been run yet
           await supabase.from("users").upsert({
             id: finalProfile.id,
             role: finalProfile.role,
@@ -231,7 +350,6 @@ export function UserProfileProvider({
           });
         }
 
-        // Sync hobbies in public.user_hobbies
         const { data: allHobbies } = await supabase
           .from("hobbies")
           .select("id, name");
@@ -280,6 +398,228 @@ export function UserProfileProvider({
         return updated;
       });
     }
+
+    return finalProfile;
+  };
+
+  const identifyExistingUser = async (params: {
+    email?: string;
+    phoneE164?: string;
+  }): Promise<UserProfile | null> => {
+    const cleanEmail = params.email?.trim().toLowerCase();
+    const cleanPhone = params.phoneE164?.trim();
+
+    // 1. Check local profile first
+    if (profile) {
+      if (
+        (cleanEmail && profile.email?.toLowerCase() === cleanEmail) ||
+        (cleanPhone && profile.phone === cleanPhone)
+      ) {
+        return profile;
+      }
+    }
+
+    // 2. Check Supabase public.users
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase.from("users").select("*");
+        if (cleanEmail) {
+          query = query.ilike("email", cleanEmail);
+        } else if (cleanPhone) {
+          query = query.eq("phone", cleanPhone);
+        }
+
+        const { data: foundUsers } = await query.limit(1);
+        const dbUser = foundUsers?.[0];
+        if (dbUser) {
+          const { data: dbHobbies } = await supabase
+            .from("user_hobbies")
+            .select("hobbies(name)")
+            .eq("user_id", dbUser.id);
+
+          const hobbyNames =
+            dbHobbies?.map((r: any) => r.hobbies?.name).filter(Boolean) || [];
+
+          const loadedProfile: UserProfile = {
+            id: dbUser.id,
+            role: dbUser.role,
+            fullName: dbUser.full_name,
+            email: dbUser.email || cleanEmail,
+            phone: dbUser.phone || cleanPhone,
+            age: dbUser.age || 18,
+            country: dbUser.country || "United States",
+            city: dbUser.city || "New York",
+            formerRole:
+              dbUser.former_role ||
+              (dbUser.role === "elderly"
+                ? "Native English Host"
+                : "Teen Learner"),
+            bio: dbUser.bio || "",
+            avatarUrl:
+              dbUser.avatar_url ||
+              (dbUser.role === "elderly"
+                ? "/avatars/arthur.png"
+                : "/avatars/mateo.png"),
+            hobbies:
+              hobbyNames.length > 0 ? hobbyNames : ["Football / Soccer"],
+            contact: dbUser.email || dbUser.phone,
+            timezone: dbUser.timezone || "America/New_York",
+          };
+
+          setProfile(loadedProfile);
+          window.localStorage.setItem(
+            STORAGE_PROFILE_KEY,
+            JSON.stringify(loadedProfile)
+          );
+          return loadedProfile;
+        }
+      } catch {
+        // Ignore if email/phone columns not yet added
+      }
+    }
+
+    return null;
+  };
+
+  const recordMeetingBooked = async (meeting: ScheduledMeeting) => {
+    setMeetings((prev) => {
+      const filtered = prev.filter((m) => m.id !== meeting.id);
+      const updated = [meeting, ...filtered];
+      window.localStorage.setItem(
+        STORAGE_MEETINGS_KEY,
+        JSON.stringify(updated)
+      );
+      return updated;
+    });
+
+    try {
+      const savedRaw = window.localStorage.getItem(STORAGE_NOTIFS_KEY);
+      if (savedRaw) {
+        setNotifications(JSON.parse(savedRaw));
+      }
+    } catch {}
+  };
+
+  const rescheduleMeeting = async (
+    meetingId: string,
+    newScheduledStartUTC: string
+  ): Promise<ScheduledMeeting | null> => {
+    const target = meetings.find((m) => m.id === meetingId);
+    if (!target) return null;
+
+    const startDate = new Date(newScheduledStartUTC);
+    if (isNaN(startDate.getTime())) return null;
+    const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
+
+    const updatedMeeting: ScheduledMeeting = {
+      ...target,
+      scheduledStartUTC: startDate.toISOString(),
+      scheduledEndUTC: endDate.toISOString(),
+      status: "scheduled",
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (isSupabaseConfigured() && UUID_REGEX.test(meetingId)) {
+      try {
+        const supabase = createClient();
+        await supabase
+          .from("meetings")
+          .update({
+            scheduled_start: updatedMeeting.scheduledStartUTC,
+            scheduled_end: updatedMeeting.scheduledEndUTC,
+            status: "scheduled",
+          })
+          .eq("id", meetingId);
+      } catch {}
+    }
+
+    const participants = await resolveParticipantsFromDB({
+      hostId: updatedMeeting.hostId,
+      hostName: updatedMeeting.hostName,
+      hostEmail: updatedMeeting.hostEmail,
+      hostPhone: updatedMeeting.hostPhone,
+      hostTimezone: updatedMeeting.hostTimezone,
+      learnerId: updatedMeeting.learnerId,
+      learnerName: updatedMeeting.learnerName,
+      learnerEmail: updatedMeeting.learnerEmail,
+      learnerPhone: updatedMeeting.learnerPhone,
+      learnerTimezone: updatedMeeting.learnerTimezone,
+    });
+
+    const newNotifs = await logNotificationsToSupabase({
+      meetingId: updatedMeeting.id,
+      eventType: "changed",
+      host: participants.host,
+      learner: participants.learner,
+      scheduledStartUTC: updatedMeeting.scheduledStartUTC,
+      googleMeetLink: updatedMeeting.googleMeetLink,
+      aiIcebreaker: updatedMeeting.aiIcebreaker,
+    });
+
+    setNotifications((prev) => [...newNotifs, ...prev].slice(0, 40));
+    setMeetings((prev) => {
+      const next = prev.map((m) => (m.id === meetingId ? updatedMeeting : m));
+      window.localStorage.setItem(STORAGE_MEETINGS_KEY, JSON.stringify(next));
+      return next;
+    });
+
+    return updatedMeeting;
+  };
+
+  const cancelMeeting = async (
+    meetingId: string
+  ): Promise<ScheduledMeeting | null> => {
+    const target = meetings.find((m) => m.id === meetingId);
+    if (!target) return null;
+
+    const canceledMeeting: ScheduledMeeting = {
+      ...target,
+      status: "cancelled",
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (isSupabaseConfigured() && UUID_REGEX.test(meetingId)) {
+      try {
+        const supabase = createClient();
+        await supabase
+          .from("meetings")
+          .update({ status: "cancelled" })
+          .eq("id", meetingId);
+      } catch {}
+    }
+
+    const participants = await resolveParticipantsFromDB({
+      hostId: canceledMeeting.hostId,
+      hostName: canceledMeeting.hostName,
+      hostEmail: canceledMeeting.hostEmail,
+      hostPhone: canceledMeeting.hostPhone,
+      hostTimezone: canceledMeeting.hostTimezone,
+      learnerId: canceledMeeting.learnerId,
+      learnerName: canceledMeeting.learnerName,
+      learnerEmail: canceledMeeting.learnerEmail,
+      learnerPhone: canceledMeeting.learnerPhone,
+      learnerTimezone: canceledMeeting.learnerTimezone,
+    });
+
+    const newNotifs = await logNotificationsToSupabase({
+      meetingId: canceledMeeting.id,
+      eventType: "canceled",
+      host: participants.host,
+      learner: participants.learner,
+      scheduledStartUTC: canceledMeeting.scheduledStartUTC,
+      googleMeetLink: canceledMeeting.googleMeetLink,
+      aiIcebreaker: canceledMeeting.aiIcebreaker,
+    });
+
+    setNotifications((prev) => [...newNotifs, ...prev].slice(0, 40));
+    setMeetings((prev) => {
+      const next = prev.map((m) => (m.id === meetingId ? canceledMeeting : m));
+      window.localStorage.setItem(STORAGE_MEETINGS_KEY, JSON.stringify(next));
+      return next;
+    });
+
+    return canceledMeeting;
   };
 
   const clearProfile = () => {
@@ -289,7 +629,18 @@ export function UserProfileProvider({
 
   return (
     <UserProfileContext.Provider
-      value={{ profile, customHosts, saveProfile, clearProfile }}
+      value={{
+        profile,
+        customHosts,
+        meetings,
+        notifications,
+        saveProfile,
+        identifyExistingUser,
+        recordMeetingBooked,
+        rescheduleMeeting,
+        cancelMeeting,
+        clearProfile,
+      }}
     >
       {children}
     </UserProfileContext.Provider>

@@ -6,8 +6,10 @@ import {
   format12Hour,
   localSlotToUTC,
   utcSlotToLocalKey,
+  safeTimeZone,
 } from "@/lib/timezone";
 import { useLanguage } from "@/context/LanguageContext";
+import { useUserProfile } from "@/context/UserProfileContext";
 import {
   Sunrise,
   Sun,
@@ -61,36 +63,41 @@ const DEFAULT_DEMO_SLOTS = [
 export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
   const supabase = createClient();
   const { lang } = useLanguage();
+  const { profile } = useUserProfile();
 
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(
     () => new Set(DEFAULT_DEMO_SLOTS)
   );
   const [period, setPeriod] = useState<TimePeriod>("morning");
+  const [mobileDayIndex, setMobileDayIndex] = useState<number>(1);
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<"paint" | "erase">("paint");
   const [saving, setSaving] = useState(false);
   const [saveBanner, setSaveBanner] = useState<string | null>(null);
-  const [userTimezone, setUserTimezone] = useState<string>("Local Time");
+  const [userTimezone, setUserTimezone] = useState<string>("America/New_York");
 
-  // Hydration-safe timezone resolution on client mount
   useEffect(() => {
-    setUserTimezone(
-      Intl.DateTimeFormat().resolvedOptions().timeZone || "Local Time"
-    );
-  }, []);
+    if (profile?.timezone) {
+      setUserTimezone(safeTimeZone(profile.timezone));
+    } else {
+      setUserTimezone(
+        safeTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone)
+      );
+    }
+  }, [profile?.timezone]);
 
   const t = {
     en: {
-      localTimeBadge: `Shown in your local time: ${userTimezone}`,
+      localTimeBadge: `Shown in your time zone: ${userTimezone}`,
       title: "When would you like to chat with learners?",
       subtitle:
-        "Tap any box below—or press and drag across several boxes—to mark when you are free for a friendly 30-minute video call.",
+        "Tap any 30-minute time slot below to mark when you are free for a friendly video call. All times automatically convert to each learner's time zone.",
       selectedSlotsLabel: "Selected Slots",
       minUnit: "min",
       savingBtn: "Saving Schedule...",
       saveBtn: "Save My Schedule",
       savedMsg: (count: number) =>
-        `Schedule saved! You have ${count} weekly 30-minute chat slots open (automatically saved in UTC).`,
+        `Schedule saved! You have ${count} weekly 30-minute slots open in ${userTimezone} (stored in UTC for global timezone conversion).`,
       step1Title: "1. Pick a part of the day:",
       legendFree: "Available (Free)",
       legendOpen: "Unavailable (Tap to open)",
@@ -101,24 +108,24 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
       evening: "Evening",
       eveningSub: "4:00 PM – 8:00 PM",
       viewing: "Viewing",
-      step2Title: "2. Tap or drag across 30-minute time slots:",
-      dragTip:
-        "Tip: Hold down your mouse or slide your finger across boxes to paint multiple slots!",
+      step2Title: "2. Tap 30-minute time slots:",
+      mobileDayLabel: "Select Day of Week:",
+      dragTip: "Tip: Slide across boxes to select multiple slots!",
       timeCol: "Time",
       freeBtn: "Free",
       openBtn: "Open",
     },
     he: {
-      localTimeBadge: `מוצג לפי השעון המקומי שלך: ${userTimezone}`,
+      localTimeBadge: `מוצג לפי אזור הזמן שלך: ${userTimezone}`,
       title: "מתי נוח לך לשוחח עם תלמידים?",
       subtitle:
-        "לחצו על כל משבצת למטה — או לחצו וגררו על פני מספר משבצות — כדי לסמן מתי אתם פנויים לשיחת וידאו ידידותית של 30 דקות.",
+        "לחצו על כל משבצת של 30 דקות למטה כדי לסמן מתי אתם פנויים לשיחת וידאו. השעות מומרות אוטומטית לאזור הזמן של כל תלמיד.",
       selectedSlotsLabel: "משבצות שנבחרו",
       minUnit: "דק׳",
       savingBtn: "שומר יומן...",
       saveBtn: "שמירת היומן שלי",
       savedMsg: (count: number) =>
-        `היומן נשמר בהצלחה! פתחתם ${count} משבצות שבועיות של 30 דקות (נשמר אוטומטית ב-UTC).`,
+        `היומן נשמר בהצלחה! פתחתם ${count} משבצות שבועיות של 30 דקות באזור הזמן ${userTimezone}.`,
       step1Title: "1. בחרו חלק ביום:",
       legendFree: "פנוי לשיחה (נבחר)",
       legendOpen: "לא נבחר (לחצו לפתיחה)",
@@ -129,8 +136,9 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
       evening: "ערב",
       eveningSub: "16:00 – 20:00",
       viewing: "מוצג כעת",
-      step2Title: "2. לחצו או גררו על פני משבצות של 30 דקות:",
-      dragTip: "טיפ: החזיקו את העכבר או החליקו אצבע כדי לסמן מספר שעות ברצף!",
+      step2Title: "2. בחרו משבצות של 30 דקות:",
+      mobileDayLabel: "בחרו יום בשבוע:",
+      dragTip: "טיפ: החליקו על פני מספר משבצות לסימון מהיר!",
       timeCol: "שעה",
       freeBtn: "פנוי",
       openBtn: "סמן",
@@ -149,16 +157,16 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
         if (!error && data && data.length > 0) {
           const loaded = new Set<string>();
           data.forEach((row) => {
-            loaded.add(utcSlotToLocalKey(row.day_of_week, row.start_time));
+            loaded.add(
+              utcSlotToLocalKey(row.day_of_week, row.start_time, userTimezone)
+            );
           });
           setSelectedSlots(loaded);
         }
-      } catch {
-        // Keep demo defaults
-      }
+      } catch {}
     }
     fetchAvailability();
-  }, [hostId, supabase]);
+  }, [hostId, supabase, userTimezone]);
 
   useEffect(() => {
     const stopDragging = () => setIsDragging(false);
@@ -201,7 +209,6 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
     applySlotChange(key, dragMode);
   };
 
-  // Touch-screen / iPad drag-to-paint support across slot buttons
   const handleGridTouchMove = (e: React.TouchEvent) => {
     if (!isDragging || e.touches.length === 0) return;
     const touch = e.touches[0];
@@ -220,7 +227,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
     try {
       const utcPayload = Array.from(selectedSlots).map((key) => {
         const [dayStr, time24] = key.split("-");
-        const utc = localSlotToUTC(Number(dayStr), time24);
+        const utc = localSlotToUTC(Number(dayStr), time24, userTimezone);
         return {
           host_id: hostId,
           ...utc,
@@ -253,37 +260,37 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
   };
 
   const visibleTimeSlots = getSlotsForPeriod(period);
+  const activeMobileDay = DAYS_OF_WEEK[mobileDayIndex] || DAYS_OF_WEEK[1];
 
   return (
     <section
       aria-label="Weekly Availability Calendar"
-      className="py-8 px-4 sm:px-8 md:px-12 select-none"
+      className="py-4 sm:py-8 px-3 sm:px-6 md:px-10 select-none"
     >
-      <div className="max-w-7xl mx-auto bg-[#FDFBF7] text-slate-950 rounded-[36px] p-6 sm:p-10 lg:p-12 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.55)] border-2 border-white space-y-10">
-        {/* Top Banner: Warm Welcome & Primary Orange Save CTA */}
-        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-8 border-b-2 border-slate-200 pb-8">
-          <div className="space-y-3 max-w-3xl">
-            <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-purple-100 text-[#4A148C] font-extrabold text-[18px]">
-              <Clock className="w-5 h-5" />
+      <div className="max-w-7xl mx-auto bg-[#FDFBF7] text-slate-950 rounded-3xl sm:rounded-[36px] p-4 sm:p-8 lg:p-11 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.55)] border-2 border-white space-y-6 sm:space-y-9">
+        {/* Top Banner */}
+        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5 border-b-2 border-slate-200 pb-6">
+          <div className="space-y-2.5 max-w-3xl">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-100 text-[#4A148C] font-extrabold text-sm sm:text-[17px]">
+              <Clock className="w-4 h-4 shrink-0" />
               <span>{t.localTimeBadge}</span>
             </div>
 
-            <h1 className="text-[32px] sm:text-[40px] font-extrabold text-slate-950 tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-[36px] font-extrabold text-slate-950 tracking-tight leading-tight">
               {t.title}
             </h1>
 
-            <p className="text-[20px] text-slate-700 leading-relaxed">
+            <p className="text-base sm:text-[19px] text-slate-700 leading-relaxed">
               {t.subtitle}
             </p>
           </div>
 
-          {/* Summary Counter + Vibrant Orange Primary CTA (#FF6D00) */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-6 shrink-0">
-            <div className="px-6 py-4 rounded-2xl bg-purple-50 border-2 border-purple-200 text-center">
-              <span className="block text-[18px] font-bold text-slate-700">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 shrink-0">
+            <div className="px-5 py-3 rounded-2xl bg-purple-50 border-2 border-purple-200 text-center">
+              <span className="block text-sm sm:text-[16px] font-bold text-slate-700">
                 {t.selectedSlotsLabel}
               </span>
-              <span className="text-[30px] font-extrabold text-[#4A148C]">
+              <span className="text-2xl sm:text-[28px] font-extrabold text-[#4A148C]">
                 {selectedSlots.size} × 30 {t.minUnit}
               </span>
             </div>
@@ -292,46 +299,44 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
               type="button"
               onClick={handleSaveAvailability}
               disabled={saving}
-              className="min-h-[72px] px-9 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] active:scale-[0.99] text-white font-extrabold text-[22px] shadow-[0_12px_28px_-6px_rgba(255,109,0,0.65)] transition-all flex items-center justify-center gap-3 focus:outline-none focus:ring-4 focus:ring-offset-4 focus:ring-[#FF6D00]"
+              className="min-h-[60px] sm:min-h-[68px] px-7 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] active:scale-[0.99] text-white font-extrabold text-lg sm:text-[21px] shadow-[0_12px_28px_-6px_rgba(255,109,0,0.65)] transition-all flex items-center justify-center gap-3"
             >
-              <CheckCircle2 className="w-7 h-7" />
+              <CheckCircle2 className="w-6 h-6" />
               <span>{saving ? t.savingBtn : t.saveBtn}</span>
             </button>
           </div>
         </div>
 
-        {/* Confirmation Banner */}
         {saveBanner && (
           <div
             role="status"
             aria-live="polite"
-            className="p-6 rounded-2xl bg-emerald-50 border-2 border-emerald-700 text-emerald-950 text-[22px] font-extrabold flex items-center gap-4 shadow-sm"
+            className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border-2 border-emerald-700 text-emerald-950 text-base sm:text-[20px] font-extrabold flex items-center gap-3 shadow-sm"
           >
-            <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0">
-              <Check className="w-6 h-6" />
+            <div className="w-9 h-9 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0">
+              <Check className="w-5 h-5" />
             </div>
             <span>{saveBanner}</span>
           </div>
         )}
 
-        {/* Step 1: Time-of-Day Filter Tabs (Minimum 64px height, 24px gap) */}
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <h2 className="text-[24px] font-extrabold text-slate-950">
+        {/* Step 1: Time-of-Day Filter Tabs */}
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg sm:text-[22px] font-extrabold text-slate-950">
               {t.step1Title}
             </h2>
 
-            {/* Clear Visual Legend */}
-            <div className="flex flex-wrap items-center gap-6 text-[19px] font-bold text-slate-800">
-              <div className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-xl bg-[#4A148C] text-white inline-flex items-center justify-center shadow-sm">
-                  <Check className="w-5 h-5" />
+            <div className="flex flex-wrap items-center gap-4 text-sm sm:text-[17px] font-bold text-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-lg bg-[#4A148C] text-white inline-flex items-center justify-center">
+                  <Check className="w-4 h-4" />
                 </span>
                 <span>{t.legendFree}</span>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-xl bg-white border-2 border-slate-300 text-slate-500 inline-flex items-center justify-center">
-                  <Plus className="w-5 h-5" />
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-lg bg-white border-2 border-slate-300 text-slate-500 inline-flex items-center justify-center">
+                  <Plus className="w-4 h-4" />
                 </span>
                 <span>{t.legendOpen}</span>
               </div>
@@ -341,7 +346,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
           <div
             role="tablist"
             aria-label={t.step1Title}
-            className="grid grid-cols-1 md:grid-cols-3 gap-6"
+            className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-5"
           >
             {(
               [
@@ -373,22 +378,24 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                   type="button"
                   aria-selected={active}
                   onClick={() => setPeriod(id)}
-                  className={`min-h-[72px] px-6 py-4 rounded-2xl font-extrabold text-[20px] border-2 transition-all flex items-center justify-between ${
+                  className={`min-h-[64px] px-4 py-3 rounded-2xl font-extrabold text-base sm:text-[19px] border-2 transition-all flex items-center justify-between ${
                     active
                       ? "bg-[#4A148C] text-white border-[#4A148C] shadow-lg ring-4 ring-[#4A148C]/20"
-                      : "bg-white text-slate-900 border-slate-300 hover:border-slate-700 hover:bg-slate-50"
+                      : "bg-white text-slate-900 border-slate-300 hover:border-slate-700"
                   }`}
                 >
-                  <div className="flex items-center gap-3.5 text-start">
+                  <div className="flex items-center gap-3 text-start">
                     <Icon
-                      className={`w-7 h-7 shrink-0 ${
+                      className={`w-6 h-6 shrink-0 ${
                         active ? "text-amber-300" : "text-[#4A148C]"
                       }`}
                     />
                     <div>
-                      <div className="text-[22px] leading-tight">{label}</div>
+                      <div className="text-lg sm:text-[20px] leading-tight">
+                        {label}
+                      </div>
                       <div
-                        className={`text-[18px] font-semibold ${
+                        className={`text-sm sm:text-[16px] font-semibold ${
                           active ? "text-purple-200" : "text-slate-600"
                         }`}
                       >
@@ -397,7 +404,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                     </div>
                   </div>
                   {active && (
-                    <span className="px-3 py-1 rounded-full bg-white/15 text-[16px] font-bold">
+                    <span className="px-2.5 py-0.5 rounded-full bg-white/15 text-xs sm:text-sm font-bold">
                       {t.viewing}
                     </span>
                   )}
@@ -407,58 +414,129 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
           </div>
         </div>
 
-        {/* Step 2: Weekly Calendar Grid — Strict 24px (gap-6) between every slot and 64px height */}
+        {/* Step 2: Mobile-Optimized Single-Day Picker (< lg) + Full 7-Day Grid (lg+) */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-[24px] font-extrabold text-slate-950">
+            <h2 className="text-lg sm:text-[22px] font-extrabold text-slate-950">
               {t.step2Title}
             </h2>
-            <span className="hidden md:inline-flex items-center gap-2 text-[18px] font-bold text-[#4A148C]">
+            <span className="hidden lg:inline-flex items-center gap-2 text-[17px] font-bold text-[#4A148C]">
               <Sparkles className="w-5 h-5" />
               <span>{t.dragTip}</span>
             </span>
           </div>
 
+          {/* MOBILE / SMALL SCREEN VIEW (< lg): Day Pill Tabs + Vertical 2-Column Time Buttons */}
+          <div className="lg:hidden space-y-4">
+            <div className="space-y-2">
+              <span className="block text-sm font-bold text-slate-700">
+                {t.mobileDayLabel}
+              </span>
+              <div className="grid grid-cols-7 gap-1.5">
+                {DAYS_OF_WEEK.map((day) => {
+                  const isActiveDay = mobileDayIndex === day.index;
+                  return (
+                    <button
+                      key={day.index}
+                      type="button"
+                      onClick={() => setMobileDayIndex(day.index)}
+                      className={`min-h-[52px] rounded-xl border-2 font-extrabold text-sm flex flex-col items-center justify-center transition-all ${
+                        isActiveDay
+                          ? "bg-[#4A148C] text-white border-[#4A148C] shadow-md"
+                          : "bg-white text-slate-800 border-slate-300"
+                      }`}
+                    >
+                      <span>{lang === "he" ? day.shortHe : day.shortEn}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-100 border-2 border-slate-200 space-y-3">
+              <div className="text-base font-extrabold text-[#4A148C] text-center">
+                {lang === "he"
+                  ? activeMobileDay.fullHe
+                  : activeMobileDay.fullEn}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {visibleTimeSlots.map((time24) => {
+                  const key = `${activeMobileDay.index}-${time24}`;
+                  const isSelected = selectedSlots.has(key);
+
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() =>
+                        applySlotChange(key, isSelected ? "erase" : "paint")
+                      }
+                      aria-pressed={isSelected}
+                      className={`min-h-[60px] px-3 py-2.5 rounded-2xl border-2 font-extrabold text-base transition-all flex flex-col items-center justify-center gap-0.5 ${
+                        isSelected
+                          ? "bg-[#4A148C] text-white border-[#2A0854] shadow-md"
+                          : "bg-white text-slate-800 border-slate-300"
+                      }`}
+                    >
+                      <span dir="ltr">{format12Hour(time24)}</span>
+                      <span className="text-xs font-bold flex items-center gap-1 opacity-90">
+                        {isSelected ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{t.freeBtn}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>{t.openBtn}</span>
+                          </>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* DESKTOP VIEW (lg+): Full 7-Column Weekly Grid */}
           <div
-            className="overflow-x-auto pb-4"
+            className="hidden lg:block overflow-x-auto pb-2"
             onTouchMove={handleGridTouchMove}
           >
-            <div className="min-w-[980px] bg-slate-100/80 border-2 border-slate-200 rounded-3xl p-6 space-y-6">
-              {/* Day Column Headers */}
-              <div className="grid grid-cols-8 gap-6 items-center">
-                <div className="text-[20px] font-extrabold text-slate-700 text-center">
+            <div className="bg-slate-100/80 border-2 border-slate-200 rounded-3xl p-6 space-y-5">
+              <div className="grid grid-cols-8 gap-4 items-center">
+                <div className="text-[18px] font-extrabold text-slate-700 text-center">
                   {t.timeCol}
                 </div>
                 {DAYS_OF_WEEK.map((day) => (
                   <div
                     key={day.index}
-                    className="text-center py-3.5 rounded-2xl bg-white border-2 border-slate-300 shadow-sm"
+                    className="text-center py-3 rounded-2xl bg-white border-2 border-slate-300 shadow-sm"
                   >
-                    <span className="block text-[22px] font-extrabold text-[#4A148C]">
+                    <span className="block text-[20px] font-extrabold text-[#4A148C]">
                       {lang === "he" ? day.shortHe : day.shortEn}
                     </span>
-                    <span className="block text-[16px] font-semibold text-slate-600">
+                    <span className="block text-[14px] font-semibold text-slate-600">
                       {lang === "he" ? day.fullHe : day.fullEn}
                     </span>
                   </div>
                 ))}
               </div>
 
-              {/* 30-Minute Rows with strict gap-6 (24px) both horizontally and vertically */}
               {visibleTimeSlots.map((time24) => (
                 <div
                   key={time24}
-                  className="grid grid-cols-8 gap-6 items-center"
+                  className="grid grid-cols-8 gap-4 items-center"
                 >
-                  {/* Row Time Label (20px bold) */}
                   <div
                     dir="ltr"
-                    className="text-[20px] font-extrabold text-slate-900 text-center"
+                    className="text-[18px] font-extrabold text-slate-900 text-center"
                   >
                     {format12Hour(time24)}
                   </div>
 
-                  {/* 7 Interactive Day Buttons per Row — min-h-[64px] & gap-6 (24px) */}
                   {DAYS_OF_WEEK.map((day) => {
                     const key = `${day.index}-${time24}`;
                     const isSelected = selectedSlots.has(key);
@@ -472,26 +550,17 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
                         onMouseDown={() => handlePointerDown(key)}
                         onMouseEnter={() => handlePointerEnter(key)}
                         onTouchStart={() => handlePointerDown(key)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            applySlotChange(
-                              key,
-                              isSelected ? "erase" : "paint"
-                            );
-                          }
-                        }}
                         aria-pressed={isSelected}
                         aria-label={`${dayName} ${format12Hour(time24)}`}
-                        className={`min-h-[64px] rounded-2xl border-2 font-extrabold text-[19px] transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-4 focus:ring-[#4A148C] ${
+                        className={`min-h-[60px] rounded-2xl border-2 font-extrabold text-[18px] transition-all flex items-center justify-center gap-2 ${
                           isSelected
-                            ? "bg-[#4A148C] text-white border-[#2A0854] shadow-md scale-[1.02]"
-                            : "bg-white text-slate-700 border-slate-300 hover:border-[#4A148C] hover:text-[#4A148C] hover:bg-purple-50/50"
+                            ? "bg-[#4A148C] text-white border-[#2A0854] shadow-md"
+                            : "bg-white text-slate-700 border-slate-300 hover:border-[#4A148C]"
                         }`}
                       >
                         {isSelected ? (
                           <>
-                            <Check className="w-6 h-6 stroke-[3]" />
+                            <Check className="w-5 h-5 stroke-[3]" />
                             <span>{t.freeBtn}</span>
                           </>
                         ) : (

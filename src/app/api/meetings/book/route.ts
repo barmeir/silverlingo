@@ -12,11 +12,13 @@ interface BookMeetingRequestBody {
   hostName?: string;
   hostEmail?: string;
   hostPhone?: string;
+  hostTimezone?: string;
   hostHobbies?: string[];
   learnerId?: string;
   learnerName?: string;
   learnerEmail?: string;
   learnerPhone?: string;
+  learnerTimezone?: string;
   learnerHobbies?: string[];
   scheduledStartUTC: string; // ISO 8601 in UTC
 }
@@ -123,15 +125,17 @@ export async function POST(request: Request) {
     let hostName = fallbackHostName;
     let hostEmail = fallbackHostEmail;
     let hostPhone = fallbackHostPhone;
+    let hostTimezone = body.hostTimezone || "America/New_York";
     let learnerName = fallbackLearnerName;
     let learnerEmail = fallbackLearnerEmail;
     let learnerPhone = fallbackLearnerPhone;
+    let learnerTimezone = body.learnerTimezone || "America/Los_Angeles";
     let hostHobbies = fallbackHostHobbies;
     let learnerHobbies = fallbackLearnerHobbies;
 
     const supabaseReady = isSupabaseConfigured();
 
-    // Enrich names, emails, phones & hobbies from Supabase public.users
+    // Enrich names, emails, phones, timezones & hobbies from Supabase public.users
     if (supabaseReady) {
       try {
         const supabase = createClient();
@@ -144,7 +148,7 @@ export async function POST(request: Request) {
 
         const { data: usersData } = await supabase
           .from("users")
-          .select("id, full_name, email, phone")
+          .select("id, full_name, email, phone, timezone")
           .in("id", [hostId, learnerId]);
 
         if (usersData && usersData.length > 0) {
@@ -153,9 +157,11 @@ export async function POST(request: Request) {
           if (foundHost?.full_name) hostName = foundHost.full_name;
           if (foundHost?.email) hostEmail = foundHost.email;
           if (foundHost?.phone) hostPhone = foundHost.phone;
+          if (foundHost?.timezone) hostTimezone = foundHost.timezone;
           if (foundLearner?.full_name) learnerName = foundLearner.full_name;
           if (foundLearner?.email) learnerEmail = foundLearner.email;
           if (foundLearner?.phone) learnerPhone = foundLearner.phone;
+          if (foundLearner?.timezone) learnerTimezone = foundLearner.timezone;
         }
 
         const { data: hobbiesData } = await supabase
@@ -240,6 +246,7 @@ export async function POST(request: Request) {
       role: "elderly",
       email: hostEmail,
       phone: hostPhone,
+      timezone: hostTimezone,
     };
     const learnerParticipant: ParticipantContact = {
       id: learnerId,
@@ -247,6 +254,7 @@ export async function POST(request: Request) {
       role: "teen",
       email: learnerEmail,
       phone: learnerPhone,
+      timezone: learnerTimezone,
     };
 
     const hostMsgs = buildParticipantMessages(

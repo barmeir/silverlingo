@@ -1,4 +1,10 @@
-import { createClient as createBrowserSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import {
+  createClient as createBrowserSupabase,
+  isSupabaseConfigured,
+} from "@/lib/supabase/client";
+import { formatUTCInZone, safeTimeZone } from "@/lib/timezone";
+
+export type MeetingLifecycleEvent = "scheduled" | "changed" | "canceled";
 
 export interface ParticipantContact {
   id: string;
@@ -6,10 +12,14 @@ export interface ParticipantContact {
   role: "elderly" | "teen";
   email: string;
   phone: string;
+  timezone: string;
+  country?: string;
+  usState?: string;
 }
 
 export interface MeetingNotificationPayload {
   meetingId?: string;
+  eventType?: MeetingLifecycleEvent;
   host: ParticipantContact;
   learner: ParticipantContact;
   scheduledStartUTC: string;
@@ -18,52 +28,105 @@ export interface MeetingNotificationPayload {
 }
 
 export interface DispatchedNotificationRecord {
+  id?: string;
+  meetingId?: string;
+  eventType: MeetingLifecycleEvent;
   recipientName: string;
   recipientRole: "elderly" | "teen";
+  recipientTimezone: string;
+  localDateLabel: string;
+  localTimeLabel: string;
+  tzAbbrev: string;
   channel: "sms" | "email";
   recipientAddress: string;
   subject?: string;
   messageBody: string;
   deliveryStatus: "sent" | "queued_db";
+  createdAt: string;
 }
 
+/**
+ * Builds the SMS and Email notification messages for a specific participant
+ * in THAT participant's local time zone (including Date, Local Time, and TZ Abbreviation).
+ */
 export function buildParticipantMessages(
   recipient: ParticipantContact,
   partner: ParticipantContact,
   scheduledStartUTC: string,
   googleMeetLink: string,
-  aiIcebreaker: string
+  aiIcebreaker: string,
+  eventType: MeetingLifecycleEvent = "scheduled"
 ) {
-  const formattedTime = new Date(scheduledStartUTC).toLocaleString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
+  const recipientTz = safeTimeZone(recipient.timezone);
+  const partnerTz = safeTimeZone(partner.timezone);
 
-  const smsBody = `SilverLingo: Your 30-min call with ${partner.name} is booked for ${formattedTime}! Join video room: ${googleMeetLink} | Icebreaker: "${aiIcebreaker}"`;
+  const localZoned = formatUTCInZone(scheduledStartUTC, recipientTz, "en");
+  const partnerZoned = formatUTCInZone(scheduledStartUTC, partnerTz, "en");
 
-  const emailSubject = `SilverLingo Meeting Confirmed: ${recipient.name} & ${partner.name}`;
-  const emailBody = [
-    `Hi ${recipient.name},`,
-    ``,
-    `Your 30-minute SilverLingo 1-on-1 video conversation with ${partner.name} is confirmed!`,
-    ``,
-    `• Date & Time: ${formattedTime} (30 minutes)`,
-    `• Video Call Link: ${googleMeetLink}`,
-    `• AI Icebreaker: "${aiIcebreaker}"`,
-    ``,
-    `Enjoy your conversation!`,
-    `— The SilverLingo Team`,
-  ].join("\n");
+  const statusHeader =
+    eventType === "changed"
+      ? "UPDATED / RESCHEDULED"
+      : eventType === "canceled"
+      ? "CANCELED"
+      : "CONFIRMED & REMINDER";
 
-  return { smsBody, emailSubject, emailBody };
+  const smsBody =
+    eventType === "canceled"
+      ? `SilverLingo [${statusHeader}]: Your 30-min call with ${partner.name} on ${localZoned.dateLabel} at ${localZoned.timeLabel} ${localZoned.tzAbbrev} (${recipientTz}) has been CANCELED.`
+      : `SilverLingo [${statusHeader}]: 30-min call with ${partner.name} on ${localZoned.dateLabel} at ${localZoned.timeLabel} ${localZoned.tzAbbrev} (${recipientTz}). Video link: ${googleMeetLink} | Icebreaker: "${aiIcebreaker}"`;
+
+  const emailSubject =
+    eventType === "changed"
+      ? `[Rescheduled] SilverLingo Call: ${recipient.name} & ${partner.name} — ${localZoned.dateLabel} at ${localZoned.timeLabel} ${localZoned.tzAbbrev}`
+    : eventType === "canceled"
+      ? `[Canceled] SilverLingo Call: ${recipient.name} & ${partner.name} (${localZoned.dateLabel})`
+      : `SilverLingo Call Confirmed: ${recipient.name} & ${partner.name} — ${localZoned.dateLabel} at ${localZoned.timeLabel} ${localZoned.tzAbbrev}`;
+
+  const emailBody =
+    eventType === "canceled"
+      ? [
+          `Hi ${recipient.name},`,
+          ``,
+          `Your 30-minute SilverLingo 1-on-1 conversation with ${partner.name} has been CANCELED.`,
+          ``,
+          `• Original Date: ${localZoned.dateLabel}`,
+          `• Original Time (Your Time Zone): ${localZoned.timeLabel} ${localZoned.tzAbbrev} (${recipientTz})`,
+          `• Partner's Time Zone (${partner.name}): ${partnerZoned.timeLabel} ${partnerZoned.tzAbbrev} (${partnerTz})`,
+          ``,
+          `You can book a new time anytime on SilverLingo.`,
+          `— The SilverLingo Team`,
+        ].join("\n")
+      : [
+          `Hi ${recipient.name},`,
+          ``,
+          eventType === "changed"
+            ? `Your 30-minute SilverLingo 1-on-1 video conversation with ${partner.name} has been RESCHEDULED to a new time:`
+            : `Your 30-minute SilverLingo 1-on-1 video conversation with ${partner.name} is CONFIRMED!`,
+          ``,
+          `• Meeting Date: ${localZoned.dateLabel}`,
+          `• Your Local Time: ${localZoned.timeLabel} ${localZoned.tzAbbrev} (${recipientTz})`,
+          `• ${partner.name}'s Local Time: ${partnerZoned.timeLabel} ${partnerZoned.tzAbbrev} (${partnerTz})`,
+          `• Duration: 30 Minutes`,
+          `• Direct Video Call Link: ${googleMeetLink}`,
+          `• AI Icebreaker: "${aiIcebreaker}"`,
+          ``,
+          `Enjoy your conversation!`,
+          `— The SilverLingo Team`,
+        ].join("\n");
+
+  return {
+    smsBody,
+    emailSubject,
+    emailBody,
+    localDateLabel: localZoned.dateLabel,
+    localTimeLabel: localZoned.timeLabel,
+    tzAbbrev: localZoned.tzAbbrev,
+    recipientTz,
+  };
 }
 
 /**
- * Fetches email and phone from Supabase public.users for both accounts in the meeting,
+ * Fetches email, phone, and timezone from Supabase public.users for both accounts in the meeting,
  * falling back to provided profile contact details.
  */
 export async function resolveParticipantsFromDB(params: {
@@ -71,15 +134,19 @@ export async function resolveParticipantsFromDB(params: {
   hostName: string;
   hostEmail?: string;
   hostPhone?: string;
+  hostTimezone?: string;
   learnerId: string;
   learnerName: string;
   learnerEmail?: string;
   learnerPhone?: string;
+  learnerTimezone?: string;
 }): Promise<{ host: ParticipantContact; learner: ParticipantContact }> {
   let hostEmail = params.hostEmail || "arthur.host@silverlingo.org";
-  let hostPhone = params.hostPhone || "+1-800-555-0191";
+  let hostPhone = params.hostPhone || "+12125550191";
+  let hostTimezone = safeTimeZone(params.hostTimezone || "America/New_York");
   let learnerEmail = params.learnerEmail || "learner@silverlingo.org";
-  let learnerPhone = params.learnerPhone || "+972-50-123-4567";
+  let learnerPhone = params.learnerPhone || "+13105550142";
+  let learnerTimezone = safeTimeZone(params.learnerTimezone);
   let hostName = params.hostName;
   let learnerName = params.learnerName;
 
@@ -88,7 +155,7 @@ export async function resolveParticipantsFromDB(params: {
       const supabase = createBrowserSupabase();
       const { data: users } = await supabase
         .from("users")
-        .select("id, full_name, email, phone")
+        .select("id, full_name, email, phone, timezone")
         .in("id", [params.hostId, params.learnerId]);
 
       if (users && users.length > 0) {
@@ -99,11 +166,14 @@ export async function resolveParticipantsFromDB(params: {
           if (dbHost.full_name) hostName = dbHost.full_name;
           if (dbHost.email) hostEmail = dbHost.email;
           if (dbHost.phone) hostPhone = dbHost.phone;
+          if (dbHost.timezone) hostTimezone = safeTimeZone(dbHost.timezone);
         }
         if (dbLearner) {
           if (dbLearner.full_name) learnerName = dbLearner.full_name;
           if (dbLearner.email) learnerEmail = dbLearner.email;
           if (dbLearner.phone) learnerPhone = dbLearner.phone;
+          if (dbLearner.timezone)
+            learnerTimezone = safeTimeZone(dbLearner.timezone);
         }
       }
     } catch {
@@ -118,6 +188,7 @@ export async function resolveParticipantsFromDB(params: {
       role: "elderly",
       email: hostEmail,
       phone: hostPhone,
+      timezone: hostTimezone,
     },
     learner: {
       id: params.learnerId,
@@ -125,22 +196,27 @@ export async function resolveParticipantsFromDB(params: {
       role: "teen",
       email: learnerEmail,
       phone: learnerPhone,
+      timezone: learnerTimezone,
     },
   };
 }
 
 /**
- * Logs all 4 notifications (SMS + Email for both Host and Learner) into Supabase public.meeting_notifications
+ * Logs all 4 notifications (SMS + Email for both Host and Learner, each in their own timezone)
+ * into Supabase public.meeting_notifications AND dispatches via backend.
  */
 export async function logNotificationsToSupabase(
   payload: MeetingNotificationPayload
 ): Promise<DispatchedNotificationRecord[]> {
+  const eventType: MeetingLifecycleEvent = payload.eventType || "scheduled";
+
   const hostMsgs = buildParticipantMessages(
     payload.host,
     payload.learner,
     payload.scheduledStartUTC,
     payload.googleMeetLink,
-    payload.aiIcebreaker
+    payload.aiIcebreaker,
+    eventType
   );
 
   const learnerMsgs = buildParticipantMessages(
@@ -148,45 +224,94 @@ export async function logNotificationsToSupabase(
     payload.host,
     payload.scheduledStartUTC,
     payload.googleMeetLink,
-    payload.aiIcebreaker
+    payload.aiIcebreaker,
+    eventType
   );
+
+  const nowIso = new Date().toISOString();
 
   const records: DispatchedNotificationRecord[] = [
     {
+      meetingId: payload.meetingId,
+      eventType,
       recipientName: payload.host.name,
       recipientRole: "elderly",
+      recipientTimezone: hostMsgs.recipientTz,
+      localDateLabel: hostMsgs.localDateLabel,
+      localTimeLabel: hostMsgs.localTimeLabel,
+      tzAbbrev: hostMsgs.tzAbbrev,
       channel: "sms",
       recipientAddress: payload.host.phone,
       messageBody: hostMsgs.smsBody,
       deliveryStatus: "sent",
+      createdAt: nowIso,
     },
     {
+      meetingId: payload.meetingId,
+      eventType,
       recipientName: payload.host.name,
       recipientRole: "elderly",
+      recipientTimezone: hostMsgs.recipientTz,
+      localDateLabel: hostMsgs.localDateLabel,
+      localTimeLabel: hostMsgs.localTimeLabel,
+      tzAbbrev: hostMsgs.tzAbbrev,
       channel: "email",
       recipientAddress: payload.host.email,
       subject: hostMsgs.emailSubject,
       messageBody: hostMsgs.emailBody,
       deliveryStatus: "sent",
+      createdAt: nowIso,
     },
     {
+      meetingId: payload.meetingId,
+      eventType,
       recipientName: payload.learner.name,
       recipientRole: "teen",
+      recipientTimezone: learnerMsgs.recipientTz,
+      localDateLabel: learnerMsgs.localDateLabel,
+      localTimeLabel: learnerMsgs.localTimeLabel,
+      tzAbbrev: learnerMsgs.tzAbbrev,
       channel: "sms",
       recipientAddress: payload.learner.phone,
       messageBody: learnerMsgs.smsBody,
       deliveryStatus: "sent",
+      createdAt: nowIso,
     },
     {
+      meetingId: payload.meetingId,
+      eventType,
       recipientName: payload.learner.name,
       recipientRole: "teen",
+      recipientTimezone: learnerMsgs.recipientTz,
+      localDateLabel: learnerMsgs.localDateLabel,
+      localTimeLabel: learnerMsgs.localTimeLabel,
+      tzAbbrev: learnerMsgs.tzAbbrev,
       channel: "email",
       recipientAddress: payload.learner.email,
       subject: learnerMsgs.emailSubject,
       messageBody: learnerMsgs.emailBody,
       deliveryStatus: "sent",
+      createdAt: nowIso,
     },
   ];
+
+  if (typeof window !== "undefined") {
+    try {
+      const existingRaw = window.localStorage.getItem(
+        "silverlingo_notification_log"
+      );
+      const existing: DispatchedNotificationRecord[] = existingRaw
+        ? JSON.parse(existingRaw)
+        : [];
+      const updated = [...records, ...existing].slice(0, 40);
+      window.localStorage.setItem(
+        "silverlingo_notification_log",
+        JSON.stringify(updated)
+      );
+    } catch {
+      // Ignore storage quota errors
+    }
+  }
 
   if (isSupabaseConfigured()) {
     try {

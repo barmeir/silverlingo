@@ -3,11 +3,16 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { formatUTCToLocalDisplay } from "@/lib/timezone";
+import { formatUTCInZone, safeTimeZone } from "@/lib/timezone";
 import { useLanguage } from "@/context/LanguageContext";
+import { useUserProfile } from "@/context/UserProfileContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 import { withBasePath } from "@/lib/assets";
-import { buildParticipantMessages } from "@/lib/notifications";
+import {
+  buildParticipantMessages,
+  logNotificationsToSupabase,
+  type MeetingLifecycleEvent,
+} from "@/lib/notifications";
 import {
   Video,
   Sparkles,
@@ -21,48 +26,63 @@ import {
   ExternalLink,
   Mail,
   Smartphone,
+  RefreshCw,
+  XCircle,
 } from "lucide-react";
 
 interface WaitingRoomProps {
+  meetingId?: string;
   hostName: string;
   hostEmail?: string;
   hostPhone?: string;
+  hostTimezone?: string;
   hostAvatar?: string;
   learnerName: string;
   learnerEmail?: string;
   learnerPhone?: string;
+  learnerTimezone?: string;
   learnerAvatar?: string;
   scheduledStartUTC: string;
   googleMeetLink: string;
   aiIcebreaker: string;
 }
 
-/**
- * The "Waiting Room" Screen:
- * Shared by both Elderly Hosts and Teen Learners 5 minutes before the meeting starts.
- * Shows the SMS & Email notification dispatch status for both accounts in the meeting.
- */
 export default function WaitingRoom({
+  meetingId = "demo-session",
   hostName,
-  hostEmail = "arthur.host@silverlingo.org",
-  hostPhone = "+1-800-555-0191",
+  hostEmail = "arthur.pendelton@silverlingo.org",
+  hostPhone = "+12125550191",
+  hostTimezone = "America/New_York",
   hostAvatar = "/avatars/arthur.png",
   learnerName,
   learnerEmail = "learner@silverlingo.org",
-  learnerPhone = "+972-50-123-4567",
+  learnerPhone = "+13105550142",
+  learnerTimezone = "America/Los_Angeles",
   learnerAvatar = "/avatars/mateo.png",
-  scheduledStartUTC,
+  scheduledStartUTC: initialScheduledStartUTC,
   googleMeetLink,
   aiIcebreaker,
 }: WaitingRoomProps) {
   const { lang, isRTL } = useLanguage();
+  const { rescheduleMeeting, cancelMeeting } = useUserProfile();
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
 
-  const [mounted, setMounted] = useState(false);
+  const [scheduledStartUTC, setScheduledStartUTC] = useState(
+    initialScheduledStartUTC
+  );
+  const [eventType, setEventType] =
+    useState<MeetingLifecycleEvent>("scheduled");
+  const [actionBanner, setActionBanner] = useState<string | null>(null);
   const [secondsUntilStart, setSecondsUntilStart] = useState<number>(240);
 
+  const validHostTz = safeTimeZone(hostTimezone);
+  const validLearnerTz = safeTimeZone(learnerTimezone);
+
   useEffect(() => {
-    setMounted(true);
+    setScheduledStartUTC(initialScheduledStartUTC);
+  }, [initialScheduledStartUTC]);
+
+  useEffect(() => {
     const updateCountdown = () => {
       const diffMs = new Date(scheduledStartUTC).getTime() - Date.now();
       setSecondsUntilStart(Math.floor(diffMs / 1000));
@@ -72,9 +92,11 @@ export default function WaitingRoom({
     return () => clearInterval(timer);
   }, [scheduledStartUTC]);
 
-  const isWithinFiveMinutes = secondsUntilStart <= 300;
   const minutesRemaining = Math.max(0, Math.floor(secondsUntilStart / 60));
   const secondsRemaining = Math.max(0, secondsUntilStart % 60);
+
+  const hostZoned = formatUTCInZone(scheduledStartUTC, validHostTz, lang);
+  const learnerZoned = formatUTCInZone(scheduledStartUTC, validLearnerTz, lang);
 
   const hostMsgs = buildParticipantMessages(
     {
@@ -83,6 +105,7 @@ export default function WaitingRoom({
       role: "elderly",
       email: hostEmail,
       phone: hostPhone,
+      timezone: validHostTz,
     },
     {
       id: "learner",
@@ -90,10 +113,12 @@ export default function WaitingRoom({
       role: "teen",
       email: learnerEmail,
       phone: learnerPhone,
+      timezone: validLearnerTz,
     },
     scheduledStartUTC,
     googleMeetLink,
-    aiIcebreaker
+    aiIcebreaker,
+    eventType
   );
 
   const learnerMsgs = buildParticipantMessages(
@@ -103,6 +128,7 @@ export default function WaitingRoom({
       role: "teen",
       email: learnerEmail,
       phone: learnerPhone,
+      timezone: validLearnerTz,
     },
     {
       id: "host",
@@ -110,184 +136,333 @@ export default function WaitingRoom({
       role: "elderly",
       email: hostEmail,
       phone: hostPhone,
+      timezone: validHostTz,
     },
     scheduledStartUTC,
     googleMeetLink,
-    aiIcebreaker
+    aiIcebreaker,
+    eventType
   );
+
+  const handleRescheduleClick = async () => {
+    const newStart = new Date(
+      new Date(scheduledStartUTC).getTime() + 60 * 60 * 1000
+    ).toISOString();
+    setScheduledStartUTC(newStart);
+    setEventType("changed");
+
+    await rescheduleMeeting(meetingId, newStart);
+    await logNotificationsToSupabase({
+      meetingId,
+      eventType: "changed",
+      host: {
+        id: "host",
+        name: hostName,
+        role: "elderly",
+        email: hostEmail,
+        phone: hostPhone,
+        timezone: validHostTz,
+      },
+      learner: {
+        id: "learner",
+        name: learnerName,
+        role: "teen",
+        email: learnerEmail,
+        phone: learnerPhone,
+        timezone: validLearnerTz,
+      },
+      scheduledStartUTC: newStart,
+      googleMeetLink,
+      aiIcebreaker,
+    });
+
+    const newLearnerZoned = formatUTCInZone(newStart, validLearnerTz, lang);
+    const newHostZoned = formatUTCInZone(newStart, validHostTz, lang);
+    setActionBanner(
+      lang === "he"
+        ? `הפגישה שונתה לשעה ${newLearnerZoned.timeWithTz} (${newHostZoned.timeWithTz} אצל המארח). נשלחו הודעות SMS ואימייל חדשות לשני המשתתפים!`
+        : `Meeting rescheduled to ${newLearnerZoned.timeWithTz} (${newHostZoned.timeWithTz} Host time). Updated SMS & Email notifications sent to both accounts!`
+    );
+  };
+
+  const handleCancelClick = async () => {
+    setEventType("canceled");
+    await cancelMeeting(meetingId);
+    await logNotificationsToSupabase({
+      meetingId,
+      eventType: "canceled",
+      host: {
+        id: "host",
+        name: hostName,
+        role: "elderly",
+        email: hostEmail,
+        phone: hostPhone,
+        timezone: validHostTz,
+      },
+      learner: {
+        id: "learner",
+        name: learnerName,
+        role: "teen",
+        email: learnerEmail,
+        phone: learnerPhone,
+        timezone: validLearnerTz,
+      },
+      scheduledStartUTC,
+      googleMeetLink,
+      aiIcebreaker,
+    });
+
+    setActionBanner(
+      lang === "he"
+        ? "הפגישה בוטלה. הודעות ביטול ב-SMS ובאימייל נשלחו אוטומטית לשני המשתתפים!"
+        : "Meeting Canceled. Cancellation SMS & Email notifications have been automatically sent to both participants!"
+    );
+  };
 
   const t = {
     en: {
       backExplore: "Back to Explore",
-      meetReady: "Google Meet Link Ready",
+      meetReady:
+        eventType === "canceled" ? "Meeting Canceled" : "Video Room Ready",
       lobbyPill: "1-on-1 Video Lobby",
       startsIn: `Starts in ${minutesRemaining}m ${String(
         secondsRemaining
       ).padStart(2, "0")}s`,
-      liveNow: "Session is Live Now!",
-      localTimeLabel: "Local Time:",
-      durationLabel: "(30 Minutes)",
+      liveNow: "Session Ready to Join",
+      rescheduleBtn: "Change Time (+1 Hour)",
+      cancelBtn: "Cancel Meeting",
       icebreakerTitle: "Your AI Icebreaker Question",
       icebreakerTip:
         "💡 Tip: Start your call by asking this question in English to break the ice right away!",
-      notifHeader: "SMS & Email Notifications Sent to Both Accounts",
+      notifHeader:
+        eventType === "changed"
+          ? "Updated SMS & Email Sent (Meeting Rescheduled)"
+          : eventType === "canceled"
+          ? "Cancellation SMS & Email Sent (Meeting Canceled)"
+          : "SMS & Email Confirmations Sent to Both Accounts",
       notifSub:
-        "Logged in DB (meeting_notifications) for both participants:",
+        "Each participant receives the meeting date, local time in their own time zone, TZ abbreviation, and links:",
       hostRoleLabel: "Senior Host",
       learnerRoleLabel: "Teen Learner",
-      sendSmsBtn: "Send SMS",
-      sendEmailBtn: "Send Email",
+      sendSmsBtn: "Open SMS",
+      sendEmailBtn: "Open Email",
       micReady: "Microphone & Camera Ready",
-      roomReady: "Private Google Meet Room Created",
-      joinBtn: "Join Video Call",
-      opens5Min: "Waiting Room Opens 5 Minutes Before Call",
+      roomReady: "Private Video Call Room Created",
+      joinBtn: "Join Video Call Now",
       joinSub:
-        "Tapping Join Video Call opens your 1-on-1 Google Meet room immediately—no Google account sign-in needed.",
-      footer: "SilverLingo • Connecting Generations Across the Globe",
+        "Tapping Join Video Call opens your 1-on-1 video room immediately on mobile or desktop.",
+      footer: "SilverLingo • Connecting Generations Across Time Zones",
     },
     he: {
       backExplore: "חזרה לרשימת המארחים",
-      meetReady: "קישור Google Meet מוכן",
+      meetReady:
+        eventType === "canceled" ? "הפגישה בוטלה" : "חדר הווידאו מוכן",
       lobbyPill: "חדר המתנה לשיחת 1-על-1",
       startsIn: `מתחיל בעוד ${minutesRemaining} דק׳ ו-${String(
         secondsRemaining
       ).padStart(2, "0")} שנ׳`,
-      liveNow: "השיחה פעילה כעת!",
-      localTimeLabel: "זמן מקומי:",
-      durationLabel: "(30 דקות)",
+      liveNow: "השיחה מוכנה להצטרפות",
+      rescheduleBtn: "שינוי שעת פגישה (+1 שעה)",
+      cancelBtn: "ביטול פגישה",
       icebreakerTitle: "שאלת שבירת הקרח שלך (AI Icebreaker)",
       icebreakerTip:
         "💡 טיפ: פתחו את השיחה בשאלה הזו באנגלית כדי לשבור את הקרח מיד בהתחלה!",
-      notifHeader: "הודעות SMS ואימייל נשלחו לשני המשתתפים בשיחה",
-      notifSub: "נרשם בטבלת מסד הנתונים (meeting_notifications) עבור שני החשבונות:",
+      notifHeader:
+        eventType === "changed"
+          ? "נשלחו הודעות SMS ואימייל מעודכנות (שינוי מועד)"
+          : eventType === "canceled"
+          ? "נשלחו הודעות ביטול ב-SMS ובאימייל לשני המשתתפים"
+          : "אישורי פגישה ותזכורות ב-SMS ובאימייל נשלחו לשני החשבונות",
+      notifSub:
+        "כל משתתף מקבל את תאריך הפגישה, השעה המדויקת באזור הזמן המקומי שלו, קיצור אזור הזמן וקישור לחדר הווידאו:",
       hostRoleLabel: "מארח/ת",
       learnerRoleLabel: "תלמיד/ה",
-      sendSmsBtn: "שליחת SMS",
-      sendEmailBtn: "שליחת אימייל",
+      sendSmsBtn: "פתיחת SMS",
+      sendEmailBtn: "פתיחת אימייל",
       micReady: "מיקרופון ומצלמה מוכנים",
-      roomReady: "חדר Google Meet פרטי נוצר עבורכם",
+      roomReady: "חדר וידאו פרטי מוכן לשיחה",
       joinBtn: "הצטרפות לשיחת הווידאו",
-      opens5Min: "חדר ההמתנה נפתח 5 דקות לפני תחילת השיחה",
       joinSub:
-        "לחיצה על ׳הצטרפות לשיחת הווידאו׳ תפתח מיד את חדר ה-Google Meet הפרטי שלכם — ללא צורך בחשבון Google.",
+        "לחיצה על ׳הצטרפות לשיחת הווידאו׳ תפתח מיד את חדר הווידאו הפרטי שלכם בטלפון או במחשב.",
       footer: "SilverLingo • מחברים בין דורות ברחבי העולם",
     },
   }[lang];
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#280750] via-[#4A148C] to-[#1A0436] text-white flex flex-col justify-between p-6 md:p-10">
+    <main className="min-h-screen overflow-x-hidden bg-gradient-to-br from-[#280750] via-[#4A148C] to-[#1A0436] text-white flex flex-col justify-between p-3 sm:p-6 md:p-10">
       {/* Top Navigation Bar */}
-      <div className="max-w-4xl w-full mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div className="max-w-4xl w-full mx-auto flex flex-wrap items-center justify-between gap-2 sm:gap-4">
         <Link
           href="/explore"
-          className="min-h-[60px] px-6 rounded-2xl bg-white/10 hover:bg-white/20 border-2 border-white/25 text-white font-bold text-[19px] inline-flex items-center gap-3 transition-colors"
+          className="min-h-[48px] sm:min-h-[56px] px-4 sm:px-5 rounded-2xl bg-white/10 hover:bg-white/20 border-2 border-white/25 text-white font-bold text-sm sm:text-[18px] inline-flex items-center gap-2 transition-colors"
         >
-          <BackArrow className="w-6 h-6" />
+          <BackArrow className="w-5 h-5" />
           <span>{t.backExplore}</span>
         </Link>
 
-        <div className="flex flex-wrap items-center gap-4">
-          <LanguageSwitcher size="elderly" />
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <LanguageSwitcher />
 
-          <div className="flex items-center gap-3 px-5 py-2.5 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 font-bold text-[18px]">
-            <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
+          <div
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl border font-bold text-xs sm:text-[16px] ${
+              eventType === "canceled"
+                ? "bg-red-500/20 border-red-400/40 text-red-200"
+                : "bg-emerald-500/20 border-emerald-400/40 text-emerald-200"
+            }`}
+          >
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${
+                eventType === "canceled"
+                  ? "bg-red-400"
+                  : "bg-emerald-400 animate-pulse"
+              }`}
+            />
             <span>{t.meetReady}</span>
           </div>
         </div>
       </div>
 
       {/* Center Waiting Room Card */}
-      <div className="my-auto py-8">
+      <div className="my-4 sm:my-8">
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-4xl mx-auto bg-[#FDFBF7] text-slate-950 rounded-[36px] p-8 sm:p-12 shadow-[0_28px_80px_-15px_rgba(0,0,0,0.65)] border-2 border-white space-y-8"
+          className="w-full max-w-4xl mx-auto bg-[#FDFBF7] text-slate-950 rounded-3xl sm:rounded-[36px] p-4 sm:p-8 md:p-11 shadow-[0_28px_80px_-15px_rgba(0,0,0,0.65)] border-2 border-white space-y-6 sm:space-y-8"
         >
           {/* Top Header & Countdown Pill */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 border-b-2 border-slate-200 pb-6">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-2 bg-[#4A148C] text-white font-extrabold px-5 py-2 rounded-full text-[18px]">
-                <Video className="w-5 h-5 text-[#FF6D00]" />
-                <span>{t.lobbyPill}</span>
-              </span>
-            </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-slate-200 pb-5">
+            <span className="inline-flex items-center gap-2 bg-[#4A148C] text-white font-extrabold px-4 py-2 rounded-full text-sm sm:text-[17px]">
+              <Video className="w-4 h-4 text-[#FF6D00]" />
+              <span>{t.lobbyPill}</span>
+            </span>
 
             <div
               role="timer"
               aria-live="polite"
-              className="px-6 py-2.5 rounded-full bg-purple-100 border-2 border-[#4A148C] text-[#4A148C] font-extrabold text-[20px] inline-flex items-center gap-2.5"
+              className="px-4 py-2 rounded-full bg-purple-100 border-2 border-[#4A148C] text-[#4A148C] font-extrabold text-sm sm:text-[18px] inline-flex items-center gap-2"
             >
-              <Clock className="w-6 h-6" />
+              <Clock className="w-5 h-5" />
               <span>{secondsUntilStart > 0 ? t.startsIn : t.liveNow}</span>
             </div>
           </div>
 
-          {/* Participants Banner with Real Portraits */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-2">
-              <h1 className="text-[32px] sm:text-[40px] font-extrabold text-slate-950 leading-tight tracking-tight">
+          {/* Participants Banner & Dual Timezone Conversion Box */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h1 className="text-2xl sm:text-[36px] font-extrabold text-slate-950 leading-tight tracking-tight">
                 {learnerName} & {hostName}
               </h1>
-              <p className="text-[20px] text-slate-700 font-semibold flex flex-wrap items-center gap-2">
-                <Calendar className="w-6 h-6 text-[#4A148C] shrink-0" />
-                <span>{t.localTimeLabel}</span>
-                <strong dir="ltr" className="text-slate-950">
-                  {mounted
-                    ? formatUTCToLocalDisplay(scheduledStartUTC)
-                    : "Loading local time..."}
-                </strong>
-                <span>{t.durationLabel}</span>
-              </p>
+
+              <div className="flex items-center -space-x-3 rtl:space-x-reverse shrink-0">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl overflow-hidden border-4 border-[#4A148C] shadow-lg bg-purple-900">
+                  <img
+                    src={withBasePath(hostAvatar)}
+                    alt={hostName}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl overflow-hidden border-4 border-[#FF6D00] shadow-lg bg-orange-600">
+                  <img
+                    src={withBasePath(learnerAvatar)}
+                    alt={learnerName}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Paired Photographic Portraits */}
-            <div className="flex items-center -space-x-4 rtl:space-x-reverse shrink-0">
-              <div className="w-20 h-20 rounded-3xl overflow-hidden border-4 border-[#4A148C] shadow-lg bg-purple-900">
-                <img
-                  src={withBasePath(hostAvatar)}
-                  alt={hostName}
-                  className="w-full h-full object-cover"
-                />
+            {/* Automatic Local Time Zone Conversion Comparison */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-100 border-2 border-slate-300">
+              <div className="bg-white p-3.5 rounded-xl border border-purple-200 space-y-1">
+                <div className="text-xs font-extrabold uppercase text-[#4A148C] flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-[#FF6D00]" />
+                  <span>
+                    {learnerName} ({validLearnerTz})
+                  </span>
+                </div>
+                <div dir="ltr" className="text-base sm:text-lg font-extrabold text-slate-950">
+                  {learnerZoned.dateLabel} •{" "}
+                  <span className="text-[#4A148C]">
+                    {learnerZoned.timeLabel} {learnerZoned.tzAbbrev}
+                  </span>
+                </div>
               </div>
-              <div className="w-20 h-20 rounded-3xl overflow-hidden border-4 border-[#FF6D00] shadow-lg bg-orange-600">
-                <img
-                  src={withBasePath(learnerAvatar)}
-                  alt={learnerName}
-                  className="w-full h-full object-cover"
-                />
+
+              <div className="bg-white p-3.5 rounded-xl border border-purple-200 space-y-1">
+                <div className="text-xs font-extrabold uppercase text-[#4A148C] flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-[#4A148C]" />
+                  <span>
+                    {hostName} ({validHostTz})
+                  </span>
+                </div>
+                <div dir="ltr" className="text-base sm:text-lg font-extrabold text-slate-950">
+                  {hostZoned.dateLabel} •{" "}
+                  <span className="text-[#4A148C]">
+                    {hostZoned.timeLabel} {hostZoned.tzAbbrev}
+                  </span>
+                </div>
               </div>
             </div>
+
+            {/* Reschedule / Cancel Buttons (Trigger Automatic Notifications) */}
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleRescheduleClick}
+                className="min-h-[46px] px-4 py-2 rounded-xl bg-purple-100 hover:bg-purple-200 border-2 border-[#4A148C] text-[#4A148C] font-extrabold text-xs sm:text-sm inline-flex items-center gap-2 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>{t.rescheduleBtn}</span>
+              </button>
+
+              {eventType !== "canceled" && (
+                <button
+                  type="button"
+                  onClick={handleCancelClick}
+                  className="min-h-[46px] px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 border-2 border-red-700 text-red-900 font-extrabold text-xs sm:text-sm inline-flex items-center gap-2 transition-colors"
+                >
+                  <XCircle className="w-4 h-4" />
+                  <span>{t.cancelBtn}</span>
+                </button>
+              )}
+            </div>
+
+            {actionBanner && (
+              <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-700 text-amber-950 text-sm sm:text-base font-extrabold">
+                ✓ {actionBanner}
+              </div>
+            )}
           </div>
 
           {/* SMS & Email Notification Status Box for BOTH Accounts */}
           <section
             aria-label={t.notifHeader}
-            className="bg-emerald-50 border-2 border-emerald-700 rounded-3xl p-6 space-y-4"
+            className="bg-emerald-50 border-2 border-emerald-700 rounded-3xl p-4 sm:p-6 space-y-4"
           >
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-7 h-7 text-emerald-700 shrink-0" />
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="w-6 h-6 text-emerald-700 shrink-0 mt-0.5" />
               <div>
-                <h2 className="text-[21px] font-extrabold text-emerald-950">
+                <h2 className="text-base sm:text-[20px] font-extrabold text-emerald-950">
                   {t.notifHeader}
                 </h2>
-                <p className="text-[16px] text-emerald-900 font-medium">
+                <p className="text-xs sm:text-[15px] text-emerald-900 font-medium">
                   {t.notifSub}
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Host Notification Card */}
               <div className="bg-white rounded-2xl p-4 border border-emerald-300 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-[18px] text-slate-950">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-extrabold text-base text-slate-950 truncate">
                     {hostName}
                   </span>
-                  <span className="text-xs font-bold uppercase px-2.5 py-0.5 rounded-full bg-purple-100 text-[#4A148C]">
-                    {t.hostRoleLabel}
+                  <span className="text-xs font-bold uppercase px-2.5 py-0.5 rounded-full bg-purple-100 text-[#4A148C] shrink-0">
+                    {t.hostRoleLabel} ({hostZoned.tzAbbrev})
                   </span>
                 </div>
-                <div className="text-[15px] text-slate-800 space-y-1">
+                <div className="text-xs sm:text-sm text-slate-800 space-y-1">
                   <div className="flex items-center gap-2" dir="ltr">
                     <Smartphone className="w-4 h-4 text-emerald-700 shrink-0" />
                     <span className="font-semibold">{hostPhone}</span>
@@ -296,24 +471,30 @@ export default function WaitingRoom({
                     <Mail className="w-4 h-4 text-[#4A148C] shrink-0" />
                     <span className="font-semibold truncate">{hostEmail}</span>
                   </div>
+                  <div
+                    dir="ltr"
+                    className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-700 font-mono leading-snug"
+                  >
+                    {hostMsgs.smsBody}
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <a
                     href={`sms:${hostPhone}?body=${encodeURIComponent(
                       hostMsgs.smsBody
                     )}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-colors"
                   >
-                    <Smartphone className="w-4 h-4" />
+                    <Smartphone className="w-3.5 h-3.5" />
                     <span>{t.sendSmsBtn}</span>
                   </a>
                   <a
                     href={`mailto:${hostEmail}?subject=${encodeURIComponent(
                       hostMsgs.emailSubject
                     )}&body=${encodeURIComponent(hostMsgs.emailBody)}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#4A148C] hover:bg-[#380E6B] text-white text-sm font-bold transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#4A148C] hover:bg-[#380E6B] text-white text-xs font-bold transition-colors"
                   >
-                    <Mail className="w-4 h-4" />
+                    <Mail className="w-3.5 h-3.5" />
                     <span>{t.sendEmailBtn}</span>
                   </a>
                 </div>
@@ -321,15 +502,15 @@ export default function WaitingRoom({
 
               {/* Learner Notification Card */}
               <div className="bg-white rounded-2xl p-4 border border-emerald-300 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-[18px] text-slate-950">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-extrabold text-base text-slate-950 truncate">
                     {learnerName}
                   </span>
-                  <span className="text-xs font-bold uppercase px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-900">
-                    {t.learnerRoleLabel}
+                  <span className="text-xs font-bold uppercase px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-900 shrink-0">
+                    {t.learnerRoleLabel} ({learnerZoned.tzAbbrev})
                   </span>
                 </div>
-                <div className="text-[15px] text-slate-800 space-y-1">
+                <div className="text-xs sm:text-sm text-slate-800 space-y-1">
                   <div className="flex items-center gap-2" dir="ltr">
                     <Smartphone className="w-4 h-4 text-emerald-700 shrink-0" />
                     <span className="font-semibold">{learnerPhone}</span>
@@ -338,24 +519,30 @@ export default function WaitingRoom({
                     <Mail className="w-4 h-4 text-[#4A148C] shrink-0" />
                     <span className="font-semibold truncate">{learnerEmail}</span>
                   </div>
+                  <div
+                    dir="ltr"
+                    className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-700 font-mono leading-snug"
+                  >
+                    {learnerMsgs.smsBody}
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <a
                     href={`sms:${learnerPhone}?body=${encodeURIComponent(
                       learnerMsgs.smsBody
                     )}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-colors"
                   >
-                    <Smartphone className="w-4 h-4" />
+                    <Smartphone className="w-3.5 h-3.5" />
                     <span>{t.sendSmsBtn}</span>
                   </a>
                   <a
                     href={`mailto:${learnerEmail}?subject=${encodeURIComponent(
                       learnerMsgs.emailSubject
                     )}&body=${encodeURIComponent(learnerMsgs.emailBody)}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#4A148C] hover:bg-[#380E6B] text-white text-sm font-bold transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#4A148C] hover:bg-[#380E6B] text-white text-xs font-bold transition-colors"
                   >
-                    <Mail className="w-4 h-4" />
+                    <Mail className="w-3.5 h-3.5" />
                     <span>{t.sendEmailBtn}</span>
                   </a>
                 </div>
@@ -366,72 +553,63 @@ export default function WaitingRoom({
           {/* AI-Generated Icebreaker Spotlight Box */}
           <section
             aria-label="Conversation Icebreaker"
-            className="relative overflow-hidden bg-gradient-to-br from-[#F5F0FA] to-purple-100/80 border-2 border-[#4A148C] rounded-3xl p-7 sm:p-9 space-y-4 shadow-inner"
+            className="relative overflow-hidden bg-gradient-to-br from-[#F5F0FA] to-purple-100/80 border-2 border-[#4A148C] rounded-3xl p-5 sm:p-8 space-y-3 shadow-inner"
           >
-            <div className="inline-flex items-center gap-2 text-[18px] font-extrabold uppercase tracking-wider text-[#4A148C]">
-              <Sparkles className="w-6 h-6 text-[#FF6D00]" />
+            <div className="inline-flex items-center gap-2 text-sm sm:text-[17px] font-extrabold uppercase tracking-wider text-[#4A148C]">
+              <Sparkles className="w-5 h-5 text-[#FF6D00]" />
               <span>{t.icebreakerTitle}</span>
             </div>
 
-            {/* Always show the English question clearly so the Learner can read it aloud */}
             <p
               dir="ltr"
-              className="text-[26px] sm:text-[32px] font-extrabold text-slate-950 leading-snug text-left"
+              className="text-xl sm:text-[28px] font-extrabold text-slate-950 leading-snug text-left"
             >
               “{aiIcebreaker}”
             </p>
 
-            <p className="text-[18px] text-slate-700 font-medium">
+            <p className="text-sm sm:text-[17px] text-slate-700 font-medium">
               {t.icebreakerTip}
             </p>
           </section>
 
           {/* Pre-Call Audio/Video Readiness Pills */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="min-h-[60px] px-5 py-3 rounded-2xl bg-slate-100 border border-slate-300 flex items-center gap-3.5 text-[18px] font-bold text-slate-800">
-              <CheckCircle2 className="w-6 h-6 text-emerald-700 shrink-0" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-5">
+            <div className="min-h-[54px] px-4 py-2.5 rounded-2xl bg-slate-100 border border-slate-300 flex items-center gap-3 text-base sm:text-[17px] font-bold text-slate-800">
+              <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
               <Mic className="w-5 h-5 text-[#4A148C] shrink-0" />
               <span>{t.micReady}</span>
             </div>
 
-            <div className="min-h-[60px] px-5 py-3 rounded-2xl bg-slate-100 border border-slate-300 flex items-center gap-3.5 text-[18px] font-bold text-slate-800">
-              <CheckCircle2 className="w-6 h-6 text-emerald-700 shrink-0" />
+            <div className="min-h-[54px] px-4 py-2.5 rounded-2xl bg-slate-100 border border-slate-300 flex items-center gap-3 text-base sm:text-[17px] font-bold text-slate-800">
+              <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
               <Volume2 className="w-5 h-5 text-[#4A148C] shrink-0" />
               <span>{t.roomReady}</span>
             </div>
           </div>
 
-          {/* Massive Vibrant Orange CTA Button (#FF6D00) — Exclusive Main Action */}
-          <div className="pt-2 space-y-4">
-            {isWithinFiveMinutes ? (
+          {/* Massive Vibrant Orange CTA Button (#FF6D00) */}
+          {eventType !== "canceled" && (
+            <div className="pt-2 space-y-3">
               <a
                 href={googleMeetLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full min-h-[84px] px-8 py-6 rounded-3xl bg-[#FF6D00] hover:bg-[#E65100] active:scale-[0.99] text-white font-extrabold text-[28px] sm:text-[32px] shadow-[0_18px_45px_-8px_rgba(255,109,0,0.7)] flex items-center justify-center gap-4 text-center transition-all focus:outline-none focus:ring-4 focus:ring-offset-4 focus:ring-[#FF6D00]"
+                className="w-full min-h-[70px] sm:min-h-[80px] px-6 py-4 rounded-3xl bg-[#FF6D00] hover:bg-[#E65100] active:scale-[0.99] text-white font-extrabold text-xl sm:text-[28px] shadow-[0_18px_45px_-8px_rgba(255,109,0,0.7)] flex items-center justify-center gap-3 text-center transition-all"
               >
-                <Video className="w-9 h-9 shrink-0" />
+                <Video className="w-7 h-7 sm:w-8 sm:h-8 shrink-0" />
                 <span>{t.joinBtn}</span>
-                <ExternalLink className="w-7 h-7 shrink-0 opacity-90" />
+                <ExternalLink className="w-6 h-6 shrink-0 opacity-90" />
               </a>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="w-full min-h-[84px] px-8 py-6 rounded-3xl bg-slate-200 text-slate-600 font-extrabold text-[24px] border-2 border-slate-300 flex items-center justify-center text-center cursor-not-allowed"
-              >
-                {t.opens5Min}
-              </button>
-            )}
 
-            <p className="text-[19px] text-center text-slate-700 font-medium">
-              {t.joinSub}
-            </p>
-          </div>
+              <p className="text-sm sm:text-[17px] text-center text-slate-700 font-medium">
+                {t.joinSub}
+              </p>
+            </div>
+          )}
         </motion.div>
       </div>
 
-      <div className="text-center text-purple-200/80 text-[18px]">
+      <div className="text-center text-purple-200/80 text-xs sm:text-[16px]">
         {t.footer}
       </div>
     </main>
