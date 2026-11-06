@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
 import { useUserProfile, ensureValidUuid } from "@/context/UserProfileContext";
@@ -20,6 +21,9 @@ import {
   MessageCircleHeart,
   ArrowRight,
   ArrowLeft,
+  Lock,
+  LogIn,
+  UserPlus,
 } from "lucide-react";
 
 export interface HostSlot {
@@ -87,6 +91,13 @@ export default function HostCard({
   const { profile, recordMeetingBooked } = useUserProfile();
   const DirectionalArrow = isRTL ? ArrowLeft : ArrowRight;
 
+  const isSignedIn = Boolean(
+    profile &&
+      profile.id &&
+      profile.fullName?.trim() &&
+      (profile.email?.trim() || profile.phone?.trim() || profile.contact?.trim())
+  );
+
   const [selectedSlot, setSelectedSlot] = useState<HostSlot | null>(
     host.availableSlots[0] || null
   );
@@ -116,6 +127,15 @@ export default function HostCard({
       : sharedHobbyObj?.name || "Stories";
 
   const handleBookSlot = async () => {
+    if (!isSignedIn || !profile) {
+      setError(
+        lang === "he"
+          ? "לא ניתן לקבוע פגישה ללא משתמש מחובר. יש להתחבר או להירשם תחילה."
+          : "You cannot schedule a meeting without being signed in. Please sign in or register first."
+      );
+      return;
+    }
+
     if (!selectedSlot) return;
     setBooking(true);
     setError(null);
@@ -134,11 +154,12 @@ export default function HostCard({
       )}`;
       const sharedHobby =
         host.sharedHobbies[0] || host.hobbies[0]?.name || "favorite hobbies";
-      let aiIcebreaker = `${learnerName}, ask ${
+      const signedInLearnerName = profile.fullName.trim();
+      let aiIcebreaker = `${signedInLearnerName}, ask ${
         host.fullName.split(" ")[0]
       } what first sparked their love for ${sharedHobby}!`;
 
-      // Resolve email, phone & timezone for both accounts from Supabase DB table (public.users) + profile
+      // Resolve email, phone & timezone for both accounts from Supabase DB table (public.users) + signed-in profile
       const participants = await resolveParticipantsFromDB({
         hostId: host.id,
         hostName: host.fullName,
@@ -147,18 +168,16 @@ export default function HostCard({
           `${host.fullName.toLowerCase().replace(/\s+/g, ".")}@silverlingo.org`,
         hostPhone: host.phone || "+12125550191",
         hostTimezone: hostTz,
-        learnerId: profile?.id || "00000000-0000-0000-0000-000000000002",
-        learnerName,
+        learnerId: profile.id,
+        learnerName: signedInLearnerName,
         learnerEmail:
-          profile?.email ||
-          (profile?.contact?.includes("@")
-            ? profile.contact
-            : "learner@silverlingo.org"),
+          profile.email ||
+          (profile.contact?.includes("@") ? profile.contact : ""),
         learnerPhone:
-          profile?.phone ||
-          (profile?.contact && !profile.contact.includes("@")
+          profile.phone ||
+          (profile.contact && !profile.contact.includes("@")
             ? profile.contact
-            : "+13105550142"),
+            : ""),
         learnerTimezone: activeViewerTz,
       });
 
@@ -454,29 +473,58 @@ export default function HostCard({
         </div>
 
         {error && (
-          <p className="text-xs text-red-400 bg-red-950/50 border border-red-800/50 rounded-lg px-3 py-2">
+          <p className="text-xs text-red-300 bg-red-950/70 border border-red-700/60 rounded-xl px-3 py-2 font-semibold">
             {error}
           </p>
         )}
 
-        <button
-          type="button"
-          disabled={!selectedSlot || booking}
-          onClick={handleBookSlot}
-          className="w-full min-h-[54px] py-3 px-5 rounded-2xl bg-[#FF6D00] hover:bg-[#F56200] active:scale-[0.99] text-white font-extrabold text-sm shadow-[0_10px_25px_-5px_rgba(255,109,0,0.5)] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-        >
-          <MessageCircleHeart className="w-4 h-4 shrink-0" />
-          <span>
-            {booking
-              ? lang === "he"
-                ? "קובע שיחה ושולח SMS + אימייל..."
-                : "Booking & Sending SMS + Email..."
-              : lang === "he"
-              ? `קביעת שיחת 30 דק׳ עם ${firstName}`
-              : `Book 30-Min Chat with ${firstName}`}
-          </span>
-          <DirectionalArrow className="w-4 h-4 shrink-0" />
-        </button>
+        {!isSignedIn ? (
+          <div className="rounded-2xl bg-amber-950/40 border border-amber-500/40 p-3.5 space-y-2.5">
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-200">
+              <Lock className="w-4 h-4 text-[#FF6D00] shrink-0" />
+              <span>
+                {lang === "he"
+                  ? "נדרשת התחברות כדי לקבוע פגישה"
+                  : "Sign in required to schedule a meeting"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href="/login"
+                className="min-h-[44px] px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <LogIn className="w-3.5 h-3.5 text-purple-300 shrink-0" />
+                <span>{lang === "he" ? "התחברות" : "Sign In"}</span>
+              </Link>
+              <Link
+                href="/onboarding"
+                className="min-h-[44px] px-3 py-2 rounded-xl bg-[#FF6D00] hover:bg-[#F56200] text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md transition-colors"
+              >
+                <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                <span>{lang === "he" ? "הרשמה" : "Register"}</span>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={!selectedSlot || booking}
+            onClick={handleBookSlot}
+            className="w-full min-h-[54px] py-3 px-5 rounded-2xl bg-[#FF6D00] hover:bg-[#F56200] active:scale-[0.99] text-white font-extrabold text-sm shadow-[0_10px_25px_-5px_rgba(255,109,0,0.5)] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <MessageCircleHeart className="w-4 h-4 shrink-0" />
+            <span>
+              {booking
+                ? lang === "he"
+                  ? "קובע שיחה ושולח SMS + אימייל..."
+                  : "Booking & Sending SMS + Email..."
+                : lang === "he"
+                ? `קביעת שיחת 30 דק׳ עם ${firstName}`
+                : `Book 30-Min Chat with ${firstName}`}
+            </span>
+            <DirectionalArrow className="w-4 h-4 shrink-0" />
+          </button>
+        )}
       </div>
     </motion.article>
   );

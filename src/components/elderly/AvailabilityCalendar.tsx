@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   format12Hour,
@@ -19,6 +20,9 @@ import {
   Clock,
   CheckCircle2,
   Sparkles,
+  Lock,
+  LogIn,
+  UserPlus,
 } from "lucide-react";
 
 const DAYS_OF_WEEK = [
@@ -65,6 +69,13 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
   const { lang } = useLanguage();
   const { profile } = useUserProfile();
 
+  const isSignedIn = Boolean(
+    profile &&
+      profile.id &&
+      profile.fullName?.trim() &&
+      (profile.email?.trim() || profile.phone?.trim() || profile.contact?.trim())
+  );
+
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(
     () => new Set(DEFAULT_DEMO_SLOTS)
   );
@@ -74,6 +85,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
   const [dragMode, setDragMode] = useState<"paint" | "erase">("paint");
   const [saving, setSaving] = useState(false);
   const [saveBanner, setSaveBanner] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [userTimezone, setUserTimezone] = useState<string>("America/New_York");
 
   useEffect(() => {
@@ -221,15 +233,27 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
   };
 
   const handleSaveAvailability = async () => {
+    if (!isSignedIn || !profile) {
+      setAuthError(
+        lang === "he"
+          ? "לא ניתן לשמור או לקבוע יומן פגישות ללא משתמש מחובר. יש להתחבר או להירשם תחילה."
+          : "You cannot save or schedule meetings without a signed-in user. Please sign in or register first."
+      );
+      return;
+    }
+
+    setAuthError(null);
     setSaving(true);
     setSaveBanner(null);
+
+    const activeHostId = profile.id || hostId;
 
     try {
       const utcPayload = Array.from(selectedSlots).map((key) => {
         const [dayStr, time24] = key.split("-");
         const utc = localSlotToUTC(Number(dayStr), time24, userTimezone);
         return {
-          host_id: hostId,
+          host_id: activeHostId,
           ...utc,
         };
       });
@@ -238,7 +262,7 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
         const { error: delError } = await supabase
           .from("availability")
           .delete()
-          .eq("host_id", hostId);
+          .eq("host_id", activeHostId);
         if (delError) throw delError;
 
         if (utcPayload.length > 0) {
@@ -306,6 +330,38 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
             </button>
           </div>
         </div>
+
+        {(!isSignedIn || authError) && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border-2 border-amber-500 text-slate-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center gap-3 font-extrabold text-base sm:text-[19px]">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5" />
+              </div>
+              <span>
+                {authError ||
+                  (lang === "he"
+                    ? "נדרש משתמש מחובר כדי לשמור יומן או לקבוע פגישות."
+                    : "Sign in or register required to save your schedule or schedule meetings.")}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <Link
+                href="/login"
+                className="min-h-[48px] px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-base flex items-center gap-2 transition-colors"
+              >
+                <LogIn className="w-5 h-5" />
+                <span>{lang === "he" ? "התחברות" : "Sign In"}</span>
+              </Link>
+              <Link
+                href="/onboarding"
+                className="min-h-[48px] px-5 py-2.5 rounded-xl bg-[#FF6D00] hover:bg-[#E65100] text-white font-extrabold text-base flex items-center gap-2 shadow-md transition-colors"
+              >
+                <UserPlus className="w-5 h-5" />
+                <span>{lang === "he" ? "הרשמה" : "Register"}</span>
+              </Link>
+            </div>
+          </div>
+        )}
 
         {saveBanner && (
           <div

@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Calendar, Video, Home, UserPlus } from "lucide-react";
+import { Calendar, Video, Home, UserPlus, LogIn, LogOut } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useUserProfile } from "@/context/UserProfileContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
@@ -14,17 +14,26 @@ export default function ElderlyLayout({
   children: React.ReactNode;
 }) {
   const { lang } = useLanguage();
-  const { profile } = useUserProfile();
+  const { profile, clearProfile } = useUserProfile();
+
+  const isSignedIn = Boolean(
+    profile &&
+      profile.id &&
+      profile.fullName?.trim() &&
+      (profile.email?.trim() || profile.phone?.trim() || profile.contact?.trim())
+  );
 
   const hostDisplayName =
-    profile && profile.role === "elderly"
+    isSignedIn && profile?.role === "elderly"
       ? profile.fullName
+      : isSignedIn
+      ? profile!.fullName
       : lang === "he"
-      ? "ארתור פנדלטון"
-      : "Arthur Pendelton";
+      ? "אורח/ת (לא מחובר/ת)"
+      : "Guest (Not Signed In)";
 
   const hostAvatarUrl =
-    profile && profile.role === "elderly" && profile.avatarUrl
+    isSignedIn && profile?.avatarUrl
       ? profile.avatarUrl
       : "/avatars/arthur.png";
 
@@ -32,14 +41,18 @@ export default function ElderlyLayout({
     en: {
       hostSub: `Host: ${hostDisplayName}`,
       home: "Home",
-      editProfile: "My Profile",
+      editProfile: isSignedIn ? "My Profile" : "Register",
+      signIn: "Sign In",
+      signOut: "Sign Out",
       schedule: "My Schedule",
       waitingRoom: "Waiting Room",
     },
     he: {
       hostSub: `מארח/ת: ${hostDisplayName}`,
       home: "דף הבית",
-      editProfile: "הפרופיל שלי",
+      editProfile: isSignedIn ? "הפרופיל שלי" : "הרשמה",
+      signIn: "התחברות",
+      signOut: "התנתקות",
       schedule: "היומן שלי",
       waitingRoom: "חדר המתנה",
     },
@@ -113,6 +126,25 @@ export default function ElderlyLayout({
               <Video className="w-5 h-5 shrink-0" />
               <span>{t.waitingRoom}</span>
             </Link>
+
+            {!isSignedIn ? (
+              <Link
+                href="/login"
+                className="min-h-[50px] sm:min-h-[56px] px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-sm sm:text-[18px] flex items-center justify-center gap-2 shadow-md transition-colors"
+              >
+                <LogIn className="w-5 h-5 shrink-0" />
+                <span>{t.signIn}</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={clearProfile}
+                className="min-h-[50px] sm:min-h-[56px] px-4 rounded-2xl bg-red-500/25 hover:bg-red-500/40 text-white font-bold text-sm sm:text-[18px] flex items-center justify-center gap-2 border-2 border-red-300/40 transition-colors"
+              >
+                <LogOut className="w-5 h-5 shrink-0" />
+                <span>{t.signOut}</span>
+              </button>
+            )}
           </nav>
         </div>
       </header>

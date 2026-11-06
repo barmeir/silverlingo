@@ -120,15 +120,14 @@ export async function POST(request: Request) {
     const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
     const scheduledEndUTC = endDate.toISOString();
 
-    let learnerId =
-      body.learnerId || "00000000-0000-0000-0000-000000000002";
+    let learnerId = body.learnerId?.trim() || "";
     let hostName = fallbackHostName;
     let hostEmail = fallbackHostEmail;
     let hostPhone = fallbackHostPhone;
     let hostTimezone = body.hostTimezone || "America/New_York";
-    let learnerName = fallbackLearnerName;
-    let learnerEmail = fallbackLearnerEmail;
-    let learnerPhone = fallbackLearnerPhone;
+    let learnerName = body.learnerName?.trim() || "";
+    let learnerEmail = body.learnerEmail?.trim() || "";
+    let learnerPhone = body.learnerPhone?.trim() || "";
     let learnerTimezone = body.learnerTimezone || "America/Los_Angeles";
     let hostHobbies = fallbackHostHobbies;
     let learnerHobbies = fallbackLearnerHobbies;
@@ -146,22 +145,24 @@ export async function POST(request: Request) {
         if (user?.email) learnerEmail = user.email;
         if (user?.phone) learnerPhone = user.phone;
 
-        const { data: usersData } = await supabase
-          .from("users")
-          .select("id, full_name, email, phone, timezone")
-          .in("id", [hostId, learnerId]);
+        if (learnerId) {
+          const { data: usersData } = await supabase
+            .from("users")
+            .select("id, full_name, email, phone, timezone")
+            .in("id", [hostId, learnerId]);
 
-        if (usersData && usersData.length > 0) {
-          const foundHost = usersData.find((u: any) => u.id === hostId);
-          const foundLearner = usersData.find((u: any) => u.id === learnerId);
-          if (foundHost?.full_name) hostName = foundHost.full_name;
-          if (foundHost?.email) hostEmail = foundHost.email;
-          if (foundHost?.phone) hostPhone = foundHost.phone;
-          if (foundHost?.timezone) hostTimezone = foundHost.timezone;
-          if (foundLearner?.full_name) learnerName = foundLearner.full_name;
-          if (foundLearner?.email) learnerEmail = foundLearner.email;
-          if (foundLearner?.phone) learnerPhone = foundLearner.phone;
-          if (foundLearner?.timezone) learnerTimezone = foundLearner.timezone;
+          if (usersData && usersData.length > 0) {
+            const foundHost = usersData.find((u: any) => u.id === hostId);
+            const foundLearner = usersData.find((u: any) => u.id === learnerId);
+            if (foundHost?.full_name) hostName = foundHost.full_name;
+            if (foundHost?.email) hostEmail = foundHost.email;
+            if (foundHost?.phone) hostPhone = foundHost.phone;
+            if (foundHost?.timezone) hostTimezone = foundHost.timezone;
+            if (foundLearner?.full_name) learnerName = foundLearner.full_name;
+            if (foundLearner?.email) learnerEmail = foundLearner.email;
+            if (foundLearner?.phone) learnerPhone = foundLearner.phone;
+            if (foundLearner?.timezone) learnerTimezone = foundLearner.timezone;
+          }
         }
 
         const { data: hobbiesData } = await supabase
@@ -184,6 +185,16 @@ export async function POST(request: Request) {
       } catch {
         // Fallback to provided values
       }
+    }
+
+    if (!learnerId || !learnerName || (!learnerEmail && !learnerPhone)) {
+      return NextResponse.json(
+        {
+          error:
+            "You must be signed in to schedule a meeting. Please sign in or register first.",
+        },
+        { status: 401 }
+      );
     }
 
     // 1. Generate Google Meet link & AI Icebreaker in parallel

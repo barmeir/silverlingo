@@ -2,7 +2,16 @@
 
 import React from "react";
 import Link from "next/link";
-import { Flame, Trophy, Sparkles, Calendar, Home, UserPlus } from "lucide-react";
+import {
+  Flame,
+  Trophy,
+  Sparkles,
+  Calendar,
+  Home,
+  UserPlus,
+  LogIn,
+  LogOut,
+} from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useUserProfile } from "@/context/UserProfileContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
@@ -13,23 +22,34 @@ export default function TeenLearnerLayout({
   children: React.ReactNode;
 }) {
   const { lang } = useLanguage();
-  const { profile } = useUserProfile();
+  const { profile, clearProfile } = useUserProfile();
+
+  const isSignedIn = Boolean(
+    profile &&
+      profile.id &&
+      profile.fullName?.trim() &&
+      (profile.email?.trim() || profile.phone?.trim() || profile.contact?.trim())
+  );
 
   const t = {
     en: {
-      rolePill: profile ? profile.fullName : "Teen Learner",
+      rolePill: isSignedIn ? profile!.fullName : "Guest (Not Signed In)",
       home: "Home",
       hostView: "Host Calendar",
-      editProfile: profile ? "Edit Profile" : "Register",
+      signIn: "Sign In",
+      signOut: "Sign Out",
+      editProfile: isSignedIn ? "Edit Profile" : "Register",
       weeklyQuest: "Weekly Fluency Quest",
       callsCount: "2 / 3 calls",
       streak: "12 Day Streak",
     },
     he: {
-      rolePill: profile ? profile.fullName : "תלמיד/ה",
+      rolePill: isSignedIn ? profile!.fullName : "אורח/ת (לא מחובר/ת)",
       home: "דף הבית",
       hostView: "יומן מארח",
-      editProfile: profile ? "עריכת פרופיל" : "הרשמה",
+      signIn: "התחברות",
+      signOut: "התנתקות",
+      editProfile: isSignedIn ? "עריכת פרופיל" : "הרשמה",
       weeklyQuest: "יעד שיחות שבועי",
       callsCount: "2 / 3 שיחות",
       streak: "רצף 12 ימים",
@@ -107,6 +127,24 @@ export default function TeenLearnerLayout({
               <Calendar className="w-3.5 h-3.5" />
               <span>{t.hostView}</span>
             </Link>
+            {!isSignedIn ? (
+              <Link
+                href="/login"
+                className="px-3 py-1.5 rounded-xl bg-[#FF6D00] hover:bg-[#F56200] text-white flex items-center gap-1.5 whitespace-nowrap shadow-sm"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>{t.signIn}</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={clearProfile}
+                className="px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-400/30 text-red-200 flex items-center gap-1.5 whitespace-nowrap"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>{t.signOut}</span>
+              </button>
+            )}
           </nav>
         </div>
       </header>

@@ -20,6 +20,8 @@ import {
   Globe2,
   Filter,
   UserPlus,
+  LogIn,
+  Lock,
   Calendar,
   RefreshCw,
   XCircle,
@@ -226,10 +228,20 @@ export default function TeenExplorePage() {
     }
   }, [profile?.timezone]);
 
-  const learnerName =
-    profile && profile.role === "teen" ? profile.fullName : "Mateo";
+  const isSignedIn = Boolean(
+    profile &&
+      profile.id &&
+      profile.fullName?.trim() &&
+      (profile.email?.trim() || profile.phone?.trim() || profile.contact?.trim())
+  );
+
+  const learnerName = isSignedIn
+    ? profile!.fullName
+    : lang === "he"
+    ? "אורח/ת"
+    : "Guest";
   const learnerAvatar =
-    profile && profile.role === "teen" && profile.avatarUrl
+    isSignedIn && profile?.avatarUrl
       ? profile.avatarUrl
       : "/avatars/mateo.png";
   const learnerHobbies =
@@ -389,28 +401,53 @@ export default function TeenExplorePage() {
                   </span>
                 </div>
 
+                {!isSignedIn && (
+                  <Link
+                    href="/login"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-white hover:bg-white/25 bg-white/15 border border-white/30 px-3 py-1 rounded-full transition-colors"
+                  >
+                    <LogIn className="w-3.5 h-3.5 text-[#FF6D00]" />
+                    <span>{lang === "he" ? "התחברות" : "Sign In"}</span>
+                  </Link>
+                )}
+
                 <Link
                   href="/onboarding"
                   className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-300 hover:text-white bg-orange-500/15 border border-orange-400/30 px-3 py-1 rounded-full transition-colors"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
                   <span>
-                    {profile
+                    {isSignedIn
                       ? lang === "he"
                         ? "עריכת פרופיל ומיקום"
                         : "Edit Profile & Location"
                       : lang === "he"
-                      ? "הרשמת משתמש (חובה)"
-                      : "Complete Registration"}
+                      ? "הרשמת משתמש (חובה לקביעת פגישה)"
+                      : "Register to Schedule"}
                   </span>
                 </Link>
               </div>
 
               <h1 className="text-xl sm:text-3xl font-extrabold text-white tracking-tight">
-                {lang === "he"
-                  ? `היי ${learnerName}! מוכנ/ה לתרגל אנגלית היום?`
-                  : `Hey ${learnerName}! Ready to practice English today?`}
+                {isSignedIn
+                  ? lang === "he"
+                    ? `היי ${learnerName}! מוכנ/ה לתרגל אנגלית היום?`
+                    : `Hey ${learnerName}! Ready to practice English today?`
+                  : lang === "he"
+                  ? "שלום אורח/ת! התחבר/י כדי לקבוע שיחה באנגלית"
+                  : "Welcome! Sign in or register to schedule an English call"}
               </h1>
+
+              {!isSignedIn && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-200 text-xs font-bold">
+                  <Lock className="w-3.5 h-3.5 text-[#FF6D00] shrink-0" />
+                  <span>
+                    {lang === "he"
+                      ? "ניתן לצפות במארחים כעת, אך קביעת פגישה זמינה רק למשתמשים מחוברים."
+                      : "You can browse hosts below, but scheduling a meeting requires a signed-in user."}
+                  </span>
+                </div>
+              )}
 
               <p className="text-xs sm:text-sm text-purple-100/90 leading-relaxed">
                 {lang === "he"
