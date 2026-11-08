@@ -64,8 +64,15 @@ export default function WaitingRoom({
   aiIcebreaker,
 }: WaitingRoomProps) {
   const { lang, isRTL } = useLanguage();
-  const { rescheduleMeeting, cancelMeeting } = useUserProfile();
+  const { profile, rescheduleMeeting, cancelMeeting } = useUserProfile();
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
+
+  const isSignedIn = Boolean(
+    profile &&
+      profile.id &&
+      profile.fullName?.trim() &&
+      (profile.email?.trim() || profile.phone?.trim() || profile.contact?.trim())
+  );
 
   const [scheduledStartUTC, setScheduledStartUTC] = useState(
     initialScheduledStartUTC
@@ -145,36 +152,47 @@ export default function WaitingRoom({
   );
 
   const handleRescheduleClick = async () => {
+    if (!isSignedIn) {
+      setActionBanner(
+        lang === "he"
+          ? "לא ניתן לשנות מועד פגישה ללא משתמש מחובר. יש להתחבר או להירשם תחילה."
+          : "You cannot reschedule a meeting without a signed-in user. Please sign in or register first."
+      );
+      return;
+    }
+
     const newStart = new Date(
       new Date(scheduledStartUTC).getTime() + 60 * 60 * 1000
     ).toISOString();
     setScheduledStartUTC(newStart);
     setEventType("changed");
 
-    await rescheduleMeeting(meetingId, newStart);
-    await logNotificationsToSupabase({
-      meetingId,
-      eventType: "changed",
-      host: {
-        id: "host",
-        name: hostName,
-        role: "elderly",
-        email: hostEmail,
-        phone: hostPhone,
-        timezone: validHostTz,
-      },
-      learner: {
-        id: "learner",
-        name: learnerName,
-        role: "teen",
-        email: learnerEmail,
-        phone: learnerPhone,
-        timezone: validLearnerTz,
-      },
-      scheduledStartUTC: newStart,
-      googleMeetLink,
-      aiIcebreaker,
-    });
+    const updated = await rescheduleMeeting(meetingId, newStart);
+    if (!updated) {
+      await logNotificationsToSupabase({
+        meetingId,
+        eventType: "changed",
+        host: {
+          id: "host",
+          name: hostName,
+          role: "elderly",
+          email: hostEmail,
+          phone: hostPhone,
+          timezone: validHostTz,
+        },
+        learner: {
+          id: profile?.id || "learner",
+          name: learnerName,
+          role: "teen",
+          email: learnerEmail,
+          phone: learnerPhone,
+          timezone: validLearnerTz,
+        },
+        scheduledStartUTC: newStart,
+        googleMeetLink,
+        aiIcebreaker,
+      });
+    }
 
     const newLearnerZoned = formatUTCInZone(newStart, validLearnerTz, lang);
     const newHostZoned = formatUTCInZone(newStart, validHostTz, lang);
@@ -186,31 +204,42 @@ export default function WaitingRoom({
   };
 
   const handleCancelClick = async () => {
+    if (!isSignedIn) {
+      setActionBanner(
+        lang === "he"
+          ? "לא ניתן לבטל פגישה ללא משתמש מחובר. יש להתחבר או להירשם תחילה."
+          : "You cannot cancel a meeting without a signed-in user. Please sign in or register first."
+      );
+      return;
+    }
+
     setEventType("canceled");
-    await cancelMeeting(meetingId);
-    await logNotificationsToSupabase({
-      meetingId,
-      eventType: "canceled",
-      host: {
-        id: "host",
-        name: hostName,
-        role: "elderly",
-        email: hostEmail,
-        phone: hostPhone,
-        timezone: validHostTz,
-      },
-      learner: {
-        id: "learner",
-        name: learnerName,
-        role: "teen",
-        email: learnerEmail,
-        phone: learnerPhone,
-        timezone: validLearnerTz,
-      },
-      scheduledStartUTC,
-      googleMeetLink,
-      aiIcebreaker,
-    });
+    const canceled = await cancelMeeting(meetingId);
+    if (!canceled) {
+      await logNotificationsToSupabase({
+        meetingId,
+        eventType: "canceled",
+        host: {
+          id: "host",
+          name: hostName,
+          role: "elderly",
+          email: hostEmail,
+          phone: hostPhone,
+          timezone: validHostTz,
+        },
+        learner: {
+          id: profile?.id || "learner",
+          name: learnerName,
+          role: "teen",
+          email: learnerEmail,
+          phone: learnerPhone,
+          timezone: validLearnerTz,
+        },
+        scheduledStartUTC,
+        googleMeetLink,
+        aiIcebreaker,
+      });
+    }
 
     setActionBanner(
       lang === "he"

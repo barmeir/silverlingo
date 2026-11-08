@@ -228,6 +228,34 @@ export async function POST(request: Request) {
     if (supabaseReady) {
       try {
         const supabase = createClient();
+
+        // Ensure both host and learner exist in public.users before inserting into public.meetings
+        await supabase.from("users").upsert(
+          [
+            {
+              id: hostId,
+              role: "elderly",
+              full_name: hostName,
+              email: hostEmail || null,
+              phone: hostPhone || null,
+              timezone: hostTimezone,
+              age: 72,
+              country: "United States",
+            },
+            {
+              id: learnerId,
+              role: "teen",
+              full_name: learnerName,
+              email: learnerEmail || null,
+              phone: learnerPhone || null,
+              timezone: learnerTimezone,
+              age: 16,
+              country: "United States",
+            },
+          ],
+          { onConflict: "id", ignoreDuplicates: true }
+        );
+
         const { data: insertedMeeting, error: dbError } = await supabase
           .from("meetings")
           .insert({
@@ -303,9 +331,13 @@ export async function POST(request: Request) {
       hostName,
       hostEmail,
       hostPhone,
+      hostTimezone,
       learnerName,
       learnerEmail,
       learnerPhone,
+      learnerTimezone,
+      hostNotification: hostMsgs,
+      learnerNotification: learnerMsgs,
     });
   } catch (err: any) {
     return NextResponse.json(

@@ -186,16 +186,97 @@ export default function HostCard({
       let learnerEmail = participants.learner.email;
       let learnerPhone = participants.learner.phone;
 
-      // 1. Save meeting directly to Supabase public.meetings if configured
-      if (isSupabaseConfigured()) {
+      let serverBooked = false;
+
+      // 1. Try server API route first (handles Google Meet link, AI icebreaker, DB insert, and server SMS/Email)
+      try {
+        const response = await fetch(withBasePath("/api/meetings/book"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hostId: host.id,
+            hostName: host.fullName,
+            hostEmail,
+            hostPhone,
+            hostTimezone: hostTz,
+            hostHobbies: host.hobbies.map((h) => h.name),
+            learnerId: participants.learner.id,
+            learnerName: signedInLearnerName,
+            learnerEmail,
+            learnerPhone,
+            learnerTimezone: activeViewerTz,
+            learnerHobbies,
+            scheduledStartUTC: selectedSlot.utcStartISO,
+          }),
+        });
+
+        if (response.ok) {
+          serverBooked = true;
+          const data = await response.json();
+          if (data.meeting?.id) meetingId = data.meeting.id;
+          if (data.meeting?.scheduled_start)
+            scheduledStart = data.meeting.scheduled_start;
+          if (data.meeting?.google_meet_link)
+            googleMeetLink = data.meeting.google_meet_link;
+          if (data.meeting?.ai_icebreaker)
+            aiIcebreaker = data.meeting.ai_icebreaker;
+          if (data.hostEmail) hostEmail = data.hostEmail;
+          if (data.hostPhone) hostPhone = data.hostPhone;
+          if (data.learnerEmail) learnerEmail = data.learnerEmail;
+          if (data.learnerPhone) learnerPhone = data.learnerPhone;
+        }
+      } catch {
+        // Static deployment uses direct Supabase client below
+      }
+
+      // 2. If server route was not used or returned a demo ID, save directly to Supabase public.meetings
+      if (
+        isSupabaseConfigured() &&
+        (!serverBooked || String(meetingId).startsWith("demo-"))
+      ) {
         try {
           const supabase = createClient();
+          const validHostUuid = ensureValidUuid(host.id);
+          const validLearnerUuid = ensureValidUuid(participants.learner.id);
+          const validMeetingUuid = ensureValidUuid(
+            String(meetingId).startsWith("demo-") ? undefined : meetingId
+          );
+
+          // Ensure both host and learner exist in public.users so foreign key constraint succeeds
+          await supabase.from("users").upsert(
+            [
+              {
+                id: validHostUuid,
+                role: "elderly",
+                full_name: host.fullName,
+                email: hostEmail || null,
+                phone: hostPhone || null,
+                timezone: hostTz,
+                age: host.age || 72,
+                country: host.country || "United States",
+                city: host.city || "New York",
+              },
+              {
+                id: validLearnerUuid,
+                role: profile.role || "teen",
+                full_name: signedInLearnerName,
+                email: learnerEmail || null,
+                phone: learnerPhone || null,
+                timezone: activeViewerTz,
+                age: profile.age || 16,
+                country: profile.country || "United States",
+                city: profile.city || "New York",
+              },
+            ],
+            { onConflict: "id", ignoreDuplicates: true }
+          );
+
           const { data: inserted } = await supabase
             .from("meetings")
             .insert({
-              id: meetingId,
-              host_id: ensureValidUuid(host.id),
-              learner_id: ensureValidUuid(participants.learner.id),
+              id: validMeetingUuid,
+              host_id: validHostUuid,
+              learner_id: validLearnerUuid,
               scheduled_start: scheduledStart,
               scheduled_end: scheduledEnd,
               google_meet_link: googleMeetLink,
@@ -211,46 +292,6 @@ export default function HostCard({
         } catch {}
       }
 
-      // 2. Also call server API route if available
-      try {
-        const response = await fetch(withBasePath("/api/meetings/book"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            hostId: host.id,
-            hostName: host.fullName,
-            hostEmail,
-            hostPhone,
-            hostTimezone: hostTz,
-            hostHobbies: host.hobbies.map((h) => h.name),
-            learnerId: participants.learner.id,
-            learnerName,
-            learnerEmail,
-            learnerPhone,
-            learnerTimezone: activeViewerTz,
-            learnerHobbies,
-            scheduledStartUTC: selectedSlot.utcStartISO,
-          }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.meeting?.id) meetingId = data.meeting.id;
-          if (data.meeting?.scheduled_start)
-            scheduledStart = data.meeting.scheduled_start;
-          if (data.meeting?.google_meet_link)
-            googleMeetLink = data.meeting.google_meet_link;
-          if (data.meeting?.ai_icebreaker)
-            aiIcebreaker = data.meeting.ai_icebreaker;
-          if (data.hostEmail) hostEmail = data.hostEmail;
-          if (data.hostPhone) hostPhone = data.hostPhone;
-          if (data.learnerEmail) learnerEmail = data.learnerEmail;
-          if (data.learnerPhone) learnerPhone = data.learnerPhone;
-        }
-      } catch {
-        // Static deployment uses direct Supabase client & notification dispatch below
-      }
-
       // 3. Log & dispatch SMS + Email notifications for BOTH accounts in their respective time zones
       await logNotificationsToSupabase({
         meetingId,
@@ -263,6 +304,7 @@ export default function HostCard({
         },
         learner: {
           ...participants.learner,
+          name: signedInLearnerName,
           email: learnerEmail,
           phone: learnerPhone,
           timezone: activeViewerTz,
@@ -270,6 +312,7 @@ export default function HostCard({
         scheduledStartUTC: scheduledStart,
         googleMeetLink,
         aiIcebreaker,
+        skipServerDispatch: serverBooked,
       });
 
       // 4. Record meeting in UserProfileContext so user can view, reschedule, or cancel it

@@ -11,6 +11,7 @@ import {
   type UserRole,
 } from "@/context/UserProfileContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
+import { withBasePath } from "@/lib/assets";
 import {
   COUNTRY_CALLING_CODES,
   COUNTRIES_OF_RESIDENCE,
@@ -65,7 +66,7 @@ async function convertFileToRenderableBlob(file: File): Promise<Blob> {
   } catch {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch("/api/photo-convert", {
+    const res = await fetch(withBasePath("/api/photo-convert"), {
       method: "POST",
       body: formData,
     });
@@ -111,7 +112,7 @@ function resizeUploadedImage(file: File): Promise<string> {
         try {
           const formData = new FormData();
           formData.append("file", file);
-          const res = await fetch("/api/photo-convert", {
+          const res = await fetch(withBasePath("/api/photo-convert"), {
             method: "POST",
             body: formData,
           });
@@ -146,14 +147,33 @@ function OnboardingFormContent() {
 
   const initialContact = searchParams.get("contact") || "";
   const isInitialEmail = initialContact.includes("@");
+  const matchedInitialPhoneCode =
+    !isInitialEmail && initialContact.startsWith("+")
+      ? [...COUNTRY_CALLING_CODES]
+          .sort((a, b) => b.code.length - a.code.length)
+          .find((c) => initialContact.startsWith(c.code))
+      : undefined;
+  const matchedInitialCountry = matchedInitialPhoneCode
+    ? COUNTRIES_OF_RESIDENCE.find(
+        (c) => c.defaultCallingCode === matchedInitialPhoneCode.code
+      )?.name || "United States"
+    : "United States";
 
   const [role, setRole] = useState<UserRole>("teen");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState(isInitialEmail ? initialContact : "");
-  const [phoneCountryCode, setPhoneCountryCode] = useState("+1");
-  const [phoneNational, setPhoneNational] = useState("");
+  const [phoneCountryCode, setPhoneCountryCode] = useState(
+    matchedInitialPhoneCode?.code || "+1"
+  );
+  const [phoneNational, setPhoneNational] = useState(
+    matchedInitialPhoneCode
+      ? initialContact.slice(matchedInitialPhoneCode.code.length)
+      : !isInitialEmail
+      ? initialContact
+      : ""
+  );
   const [age, setAge] = useState<string>("16");
-  const [country, setCountry] = useState("United States");
+  const [country, setCountry] = useState(matchedInitialCountry);
   const [usState, setUsState] = useState("New York");
   const [city, setCity] = useState("New York");
   const [formerRole, setFormerRole] = useState("High School Student");

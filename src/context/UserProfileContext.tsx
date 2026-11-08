@@ -212,6 +212,7 @@ interface UserProfileContextValue {
 }
 
 const STORAGE_PROFILE_KEY = "silverlingo_user_profile";
+const STORAGE_ACCOUNTS_KEY = "silverlingo_registered_accounts";
 const STORAGE_HOSTS_KEY = "silverlingo_custom_hosts";
 const STORAGE_MEETINGS_KEY = "silverlingo_scheduled_meetings";
 const STORAGE_NOTIFS_KEY = "silverlingo_notification_log";
@@ -388,8 +389,7 @@ export function UserProfileProvider({
               return merged;
             });
           }
-        })
-        .catch(() => {});
+        }, () => {});
     }
   }, []);
 
@@ -486,6 +486,26 @@ export function UserProfileProvider({
       JSON.stringify(finalProfile)
     );
 
+    // Also persist in registered accounts list so user can Sign Out and Sign In again by email/phone
+    try {
+      const existingRaw = window.localStorage.getItem(STORAGE_ACCOUNTS_KEY);
+      const existingAccounts: UserProfile[] = existingRaw
+        ? JSON.parse(existingRaw)
+        : [];
+      const filteredAccounts = existingAccounts.filter(
+        (acc) =>
+          acc.id !== finalProfile.id &&
+          (!finalProfile.email ||
+            acc.email?.toLowerCase() !== finalProfile.email.toLowerCase()) &&
+          (!finalProfile.phone || acc.phone !== finalProfile.phone)
+      );
+      const updatedAccounts = [finalProfile, ...filteredAccounts];
+      window.localStorage.setItem(
+        STORAGE_ACCOUNTS_KEY,
+        JSON.stringify(updatedAccounts)
+      );
+    } catch {}
+
     if (finalProfile.role === "elderly") {
       setCustomHosts((prev) => {
         const filtered = prev.filter((h) => h.id !== finalProfile.id);
@@ -505,7 +525,7 @@ export function UserProfileProvider({
     const cleanEmail = params.email?.trim().toLowerCase();
     const cleanPhone = params.phoneE164?.trim();
 
-    // 1. Check local profile first
+    // 1. Check active profile first
     if (profile) {
       if (
         (cleanEmail && profile.email?.toLowerCase() === cleanEmail) ||
@@ -515,7 +535,29 @@ export function UserProfileProvider({
       }
     }
 
-    // 2. Check Supabase public.users
+    // 2. Check registered accounts & customHosts in localStorage (preserves uploaded camera/device photo after Sign Out)
+    try {
+      const accountsRaw = window.localStorage.getItem(STORAGE_ACCOUNTS_KEY);
+      const storedAccounts: UserProfile[] = accountsRaw
+        ? JSON.parse(accountsRaw)
+        : [];
+      const allLocalPool = [...storedAccounts, ...customHosts];
+      const matchedLocal = allLocalPool.find(
+        (acc) =>
+          (cleanEmail && acc.email?.toLowerCase() === cleanEmail) ||
+          (cleanPhone && acc.phone === cleanPhone)
+      );
+      if (matchedLocal) {
+        setProfile(matchedLocal);
+        window.localStorage.setItem(
+          STORAGE_PROFILE_KEY,
+          JSON.stringify(matchedLocal)
+        );
+        return matchedLocal;
+      }
+    } catch {}
+
+    // 3. Check Supabase public.users
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();

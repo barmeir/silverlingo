@@ -2,6 +2,7 @@ import {
   createClient as createBrowserSupabase,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import { withBasePath } from "@/lib/assets";
 import { formatUTCInZone, safeTimeZone } from "@/lib/timezone";
 
 export type MeetingLifecycleEvent = "scheduled" | "changed" | "canceled";
@@ -25,6 +26,7 @@ export interface MeetingNotificationPayload {
   scheduledStartUTC: string;
   googleMeetLink: string;
   aiIcebreaker: string;
+  skipServerDispatch?: boolean;
 }
 
 export interface DispatchedNotificationRecord {
@@ -346,6 +348,27 @@ export async function logNotificationsToSupabase(
       await supabase.from("meeting_notifications").insert(dbRows);
     } catch {
       // Ignore if meeting_notifications table is not created yet
+    }
+  }
+
+  // Also trigger server-side SMS (Twilio) & Email (Resend) dispatch when not already sent by /api/meetings/book
+  if (typeof window !== "undefined" && !payload.skipServerDispatch) {
+    try {
+      await fetch(withBasePath("/api/meetings/notify"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meetingId: payload.meetingId,
+          eventType,
+          host: payload.host,
+          learner: payload.learner,
+          scheduledStartUTC: payload.scheduledStartUTC,
+          googleMeetLink: payload.googleMeetLink,
+          aiIcebreaker: payload.aiIcebreaker,
+        }),
+      });
+    } catch {
+      // Static export environment falls back to Supabase + client notification log
     }
   }
 

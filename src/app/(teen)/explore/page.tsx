@@ -59,6 +59,15 @@ const DEMO_HOSTS: HostProfile[] = [
         icon: "🎬",
       },
       { name: "World History", nameHe: "היסטוריה עולמית", icon: "🏛️" },
+      { name: "Basketball & NBA", nameHe: "כדורסל ו-NBA", icon: "🏀" },
+      { name: "Books & Literature", nameHe: "ספרים וקריאה", icon: "📚" },
+      { name: "Dogs, Cats & Pets", nameHe: "כלבים, חתולים וחיות מחמד", icon: "🐶" },
+      { name: "TV Shows & Anime", nameHe: "סדרות טלוויזיה ואנימה", icon: "📺" },
+      {
+        name: "Theater, Comedy & Podcasts",
+        nameHe: "תיאטרון, קומדיה ופודקאסטים",
+        icon: "🎭",
+      },
     ],
     sharedHobbies: ["Football / Soccer", "Classic Movies & Marvel"],
     availableSlots: [
@@ -101,7 +110,24 @@ const DEMO_HOSTS: HostProfile[] = [
     hobbies: [
       { name: "Baking & Cooking", nameHe: "אפייה ובישול", icon: "🥐" },
       { name: "Music & Vinyl", nameHe: "מוזיקה ותקליטים", icon: "🎸" },
-      { name: "Gardening", nameHe: "גינון", icon: "🌻" },
+      { name: "Gardening", nameHe: "גינון וצמחים", icon: "🌻" },
+      { name: "Coffee, Tea & Cafes", nameHe: "קפה, תה ובתי קפה", icon: "☕" },
+      {
+        name: "Playing Musical Instruments",
+        nameHe: "נגינה על כלי נגינה",
+        icon: "🎹",
+      },
+      { name: "Photography & Art", nameHe: "צילום ואמנות", icon: "📷" },
+      {
+        name: "Painting, Drawing & Crafts",
+        nameHe: "ציור, איור ויצירה",
+        icon: "🎨",
+      },
+      {
+        name: "Fitness, Running & Yoga",
+        nameHe: "כושר, ריצה ויוגה",
+        icon: "🏃",
+      },
     ],
     sharedHobbies: ["Music & Vinyl"],
     availableSlots: [
@@ -144,6 +170,24 @@ const DEMO_HOSTS: HostProfile[] = [
       },
       { name: "Travel Stories", nameHe: "סיפורי טיולים", icon: "✈️" },
       { name: "Football / Soccer", nameHe: "כדורגל", icon: "⚽" },
+      { name: "Video Games & Gaming", nameHe: "משחקי וידאו וגיימינג", icon: "🎮" },
+      { name: "Tennis & Pickleball", nameHe: "טניס ופאדל", icon: "🎾" },
+      {
+        name: "Science, Space & Astronomy",
+        nameHe: "מדע, חלל ואסטרונומיה",
+        icon: "🔬",
+      },
+      { name: "Technology & AI", nameHe: "טכנולוגיה ו-AI", icon: "💻" },
+      {
+        name: "Hiking, Camping & Nature",
+        nameHe: "טיולי טבע וקמפינג",
+        icon: "🥾",
+      },
+      {
+        name: "Classic Cars & Motorsports",
+        nameHe: "רכבי אספנות וספורט מוטורי",
+        icon: "🚗",
+      },
     ],
     sharedHobbies: ["Football / Soccer"],
     availableSlots: [
@@ -676,18 +720,35 @@ export default function TeenExplorePage() {
       </div>
 
       {/* Host Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-        {filteredHosts.map((host) => (
-          <HostCard
-            key={host.id}
-            host={host}
-            learnerName={learnerName}
-            learnerTimezone={viewerTimezone}
-            learnerHobbies={learnerHobbies}
-            onBooked={handleBooked}
-          />
-        ))}
-      </div>
+      {filteredHosts.length === 0 ? (
+        <div className="rounded-3xl bg-[#160E29] border border-purple-400/30 p-8 text-center space-y-4">
+          <p className="text-base sm:text-lg font-extrabold text-white">
+            {lang === "he"
+              ? "לא נמצאו מארחים עם התחביב שנבחר כרגע."
+              : "No hosts found for this hobby filter yet."}
+          </p>
+          <button
+            type="button"
+            onClick={() => setSelectedHobbyFilter("All")}
+            className="px-5 py-2.5 rounded-xl bg-[#FF6D00] hover:bg-[#E65100] text-white text-sm font-extrabold transition-colors"
+          >
+            {lang === "he" ? "הצג את כל המארחים" : "Show All Hosts"}
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+          {filteredHosts.map((host) => (
+            <HostCard
+              key={host.id}
+              host={host}
+              learnerName={learnerName}
+              learnerTimezone={viewerTimezone}
+              learnerHobbies={learnerHobbies}
+              onBooked={handleBooked}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -44,6 +44,53 @@ ALTER TABLE public.users
 ALTER TABLE public.users
   DROP CONSTRAINT IF EXISTS users_id_fkey;
 
+-- Seed default Senior Hosts (Idempotent via ON CONFLICT DO NOTHING)
+INSERT INTO public.users (id, role, full_name, email, phone, timezone, age, country, city, former_role, bio, avatar_url)
+VALUES
+  (
+    '00000000-0000-0000-0000-000000000001',
+    'elderly',
+    'Arthur Pendelton',
+    'arthur.pendelton@silverlingo.org',
+    '+12125550191',
+    'America/New_York',
+    74,
+    'United States',
+    'New York, NY',
+    'Retired High School History Teacher',
+    'Huge Premier League football fan and lifelong Marvel comic collector.',
+    '/avatars/arthur.png'
+  ),
+  (
+    '00000000-0000-0000-0000-000000000003',
+    'elderly',
+    'Eleanor Vance',
+    'eleanor.vance@silverlingo.org',
+    '+447700900077',
+    'Europe/London',
+    69,
+    'United Kingdom',
+    'Bath',
+    'Former Bakery Owner & Radio Host',
+    'I spent 30 years baking sourdough and spinning 70s rock vinyl records.',
+    '/avatars/eleanor.png'
+  ),
+  (
+    '00000000-0000-0000-0000-000000000004',
+    'elderly',
+    'Walter Miller',
+    'walter.miller@silverlingo.org',
+    '+13105550188',
+    'America/Los_Angeles',
+    78,
+    'United States',
+    'San Diego, CA',
+    'Retired Airline Captain',
+    'Flew commercial jets to 60 countries. Always up for a friendly game of chess!',
+    '/avatars/walter.png'
+  )
+ON CONFLICT (id) DO NOTHING;
+
 -- 3. Hobbies Table (Predefined list)
 CREATE TABLE IF NOT EXISTS public.hobbies (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -146,7 +193,7 @@ CREATE POLICY "Public users access" ON public.users
 
 DROP POLICY IF EXISTS "Hobbies are viewable by everyone" ON public.hobbies;
 CREATE POLICY "Hobbies are viewable by everyone" ON public.hobbies
-  FOR SELECT USING (true);
+  FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Public user_hobbies access" ON public.user_hobbies;
 CREATE POLICY "Public user_hobbies access" ON public.user_hobbies
