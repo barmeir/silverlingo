@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Heebo } from "next/font/google";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { UserProfileProvider } from "@/context/UserProfileContext";
+import WelcomeGuideModal from "@/components/shared/WelcomeGuideModal";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -32,7 +33,10 @@ export default function RootLayout({
     <html lang="en" className={`${jakarta.variable} ${heebo.variable}`}>
       <body className="font-sans antialiased selection:bg-[#FF6D00] selection:text-white">
         <LanguageProvider>
-          <UserProfileProvider>{children}</UserProfileProvider>
+          <UserProfileProvider>
+            {children}
+            <WelcomeGuideModal />
+          </UserProfileProvider>
         </LanguageProvider>
       </body>
     </html>

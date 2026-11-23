@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
+import { openWelcomeGuide } from "@/components/shared/WelcomeGuideModal";
 import { withBasePath } from "@/lib/assets";
 import {
   Sparkles,
@@ -17,6 +18,7 @@ import {
   Globe2,
   ShieldCheck,
   UserPlus,
+  HelpCircle,
 } from "lucide-react";
 
 export default function HomePage() {
@@ -26,6 +28,7 @@ export default function HomePage() {
   const t = {
     en: {
       badge: "Intergenerational Exchange",
+      howItWorksBtn: "How It Works",
       registerBtn: "Register Account",
       signIn: "Sign In",
       heroPill: "30-Minute 1-on-1 Video Conversations Over Shared Hobbies",
@@ -54,6 +57,7 @@ export default function HomePage() {
     },
     he: {
       badge: "חילופי שפה בין-דוריים",
+      howItWorksBtn: "איך זה עובד?",
       registerBtn: "הרשמה למערכת",
       signIn: "התחברות",
       heroPill: "שיחות וידאו של 30 דקות אחד-על-אחד סביב תחביבים משותפים",
@@ -106,6 +110,14 @@ export default function HomePage() {
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <LanguageSwitcher />
+          <button
+            type="button"
+            onClick={openWelcomeGuide}
+            className="min-h-[46px] sm:min-h-[54px] px-3.5 sm:px-4 rounded-2xl bg-purple-500/20 hover:bg-purple-500/35 backdrop-blur-md border border-purple-300/35 text-white font-bold text-sm sm:text-[16px] flex items-center gap-2 transition-all"
+          >
+            <HelpCircle className="w-4 h-4 text-[#FF6D00] shrink-0" />
+            <span>{t.howItWorksBtn}</span>
+          </button>
           <Link
             href="/onboarding"
             className="min-h-[46px] sm:min-h-[54px] px-4 sm:px-5 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] text-white font-extrabold text-sm sm:text-[17px] flex items-center gap-2 shadow-lg transition-all"
