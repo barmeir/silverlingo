@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Sparkles,
   UserPlus,
+  LogIn,
 } from "lucide-react";
 
 type AuthMethod = "email" | "phone";
@@ -33,6 +34,7 @@ export default function PasswordlessLoginPage() {
   const ForwardArrow = isRTL ? ArrowLeft : ArrowRight;
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
 
+  const [showSignInForm, setShowSignInForm] = useState(false);
   const [method, setMethod] = useState<AuthMethod>("email");
   const [phoneCountryCode, setPhoneCountryCode] = useState("+1");
   const [identifier, setIdentifier] = useState("");
@@ -49,10 +51,13 @@ export default function PasswordlessLoginPage() {
   const t = {
     en: {
       backHome: "Back to Home",
-      pill: "User Identification & Sign-In",
-      title: "Sign In or Register Your Account",
+      pill: "Welcome to SilverLingo",
+      title: "Registration or Sign In",
       subtitle:
-        "No password required. Identify yourself with your Email or Country Calling Code + Phone Number, or complete the Registration Form.",
+        "Choose Registration if you are new, or click Sign In if you already have an account.",
+      registrationBtn: "Registration",
+      signInToggleBtn: "Sign In",
+      backToChoices: "← Back",
       sentTitle: "Account Ready! Complete Your Registration",
       sentBody1: "We could not find an existing profile for ",
       sentBody2:
@@ -68,16 +73,19 @@ export default function PasswordlessLoginPage() {
       sending: "Checking Account...",
       sendEmailBtn: "Sign In with Email",
       sendPhoneBtn: "Sign In with Phone Number",
-      newHere: "New User? Go to Registration Screen (Required)",
+      newHere: "Registration",
       reassurance: "Safe, password-free identification with automatic timezone sync.",
       helpFooter: "SilverLingo • Connecting Generations Across Time Zones",
     },
     he: {
       backHome: "חזרה לדף הבית",
-      pill: "זיהוי משתמש והתחברות",
-      title: "התחברות או הרשמה למערכת",
+      pill: "ברוכים הבאים ל-SilverLingo",
+      title: "הרשמה או התחברות",
       subtitle:
-        "ללא צורך בסיסמה. הזדהו באמצעות אימייל או קידומת מדינה + מספר טלפון, או עברו למסך ההרשמה המלא.",
+        "בחרו ׳הרשמה׳ אם אתם משתמשים חדשים, או לחצו על ׳התחברות׳ אם כבר יצרתם חשבון.",
+      registrationBtn: "הרשמה (Registration)",
+      signInToggleBtn: "התחברות (Sign In)",
+      backToChoices: "→ חזרה לבחירה",
       sentTitle: "השלימו את ההרשמה שלכם!",
       sentBody1: "עדיין לא קיים פרופיל רשום עבור ",
       sentBody2:
@@ -93,7 +101,7 @@ export default function PasswordlessLoginPage() {
       sending: "בודק חשבון...",
       sendEmailBtn: "כניסה באמצעות אימייל",
       sendPhoneBtn: "כניסה באמצעות מספר טלפון",
-      newHere: "משתמשים חדשים? מעבר למסך ההרשמה (חובה)",
+      newHere: "הרשמה",
       reassurance: "זיהוי מהיר ובטוח ללא סיסמה עם סנכרון אזור זמן אוטומטי.",
       helpFooter: "SilverLingo • מחברים בין דורות ברחבי העולם",
     },
@@ -254,8 +262,53 @@ export default function PasswordlessLoginPage() {
                 </button>
               </div>
             </motion.div>
+          ) : !showSignInForm ? (
+            /* Initial Simple 2-Button View: 1st Button Registration, 2nd Button Sign In */
+            <div className="space-y-4">
+              {/* 1st Button: Registration */}
+              <Link
+                href="/onboarding"
+                className="w-full min-h-[68px] px-6 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] active:scale-[0.99] text-white font-extrabold text-xl sm:text-[24px] shadow-[0_12px_30px_-6px_rgba(255,109,0,0.6)] flex items-center justify-center gap-3 transition-all"
+              >
+                <UserPlus className="w-6 h-6 shrink-0" />
+                <span>{t.registrationBtn}</span>
+                <ForwardArrow className="w-6 h-6 shrink-0" />
+              </Link>
+
+              {/* 2nd Button Below: Sign In */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSignInForm(true);
+                  setErrorMsg(null);
+                }}
+                className="w-full min-h-[68px] px-6 rounded-2xl bg-[#4A148C] hover:bg-[#380E6B] active:scale-[0.99] text-white font-extrabold text-xl sm:text-[24px] shadow-lg flex items-center justify-center gap-3 transition-all"
+              >
+                <LogIn className="w-6 h-6 shrink-0" />
+                <span>{t.signInToggleBtn}</span>
+              </button>
+
+              <div className="pt-3 flex items-center justify-center gap-2 text-slate-700 text-sm sm:text-[16px] font-medium text-center">
+                <ShieldCheck className="w-5 h-5 text-[#4A148C] shrink-0" />
+                <span>{t.reassurance}</span>
+              </div>
+            </div>
           ) : (
+            /* Expanded Sign-In Form (Revealed after clicking Sign In) */
             <form onSubmit={handleLogin} className="space-y-6" noValidate>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSignInForm(false);
+                    setErrorMsg(null);
+                  }}
+                  className="text-sm sm:text-base font-extrabold text-[#4A148C] hover:underline"
+                >
+                  {t.backToChoices}
+                </button>
+              </div>
+
               {/* Step 1: Method Selector */}
               <div className="space-y-2.5">
                 <span className="block text-base sm:text-[19px] font-extrabold text-slate-900">

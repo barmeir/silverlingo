@@ -42,6 +42,7 @@ export default function AuthPromptModal() {
   const ForwardArrow = isRTL ? ArrowLeft : ArrowRight;
 
   const [isOpen, setIsOpen] = useState(false);
+  const [showSignInForm, setShowSignInForm] = useState(false);
   const [actionDetail, setActionDetail] = useState<AuthPromptDetail | null>(
     null
   );
@@ -56,6 +57,7 @@ export default function AuthPromptModal() {
     const handleOpen = (e: Event) => {
       const customEvent = e as CustomEvent<AuthPromptDetail | undefined>;
       setActionDetail(customEvent.detail || null);
+      setShowSignInForm(false);
       setErrorMsg(null);
       setNotFoundContact(null);
       setIsOpen(true);
@@ -80,20 +82,21 @@ export default function AuthPromptModal() {
   const t = {
     en: {
       badge: "Sign-In Required",
-      title: "Please Sign In to Continue",
+      title: "Registration or Sign In",
       defaultSub:
-        "You must be signed in to perform this action. Sign in below with your Email or Phone Number, or register a new account.",
+        "You must be signed in to perform this action. Choose Registration or Sign In below:",
       actionPrefix: "To ",
-      actionSuffix: ", please sign in or register your account first.",
-      byEmail: "Email",
-      byPhone: "Phone Number",
-      emailLabel: "Your Registered Email Address:",
-      phoneLabel: "Select Calling Code & Enter Phone Number:",
+      actionSuffix: ", please register or sign in first:",
+      registrationBtn: "Registration",
+      signInChoiceBtn: "Sign In",
+      backToChoices: "← Back",
+      step1: "1. How would you like to identify yourself?",
+      byEmail: "By Email Address",
+      byPhone: "By Phone Number",
+      emailLabel: "2. Enter your Email Address:",
+      phoneLabel: "2. Select Calling Code & Enter Phone Number:",
       signInBtn: "Sign In Now",
       checking: "Checking Account...",
-      noAccountYet: "Don't have an account yet?",
-      registerBtn: "Create New Account (Registration Screen)",
-      openFullLogin: "Open Full Sign-In Page",
       cancelBtn: "Cancel",
       notFoundTitle: "Account not registered yet!",
       notFoundBody:
@@ -102,20 +105,21 @@ export default function AuthPromptModal() {
     },
     he: {
       badge: "נדרשת התחברות למערכת",
-      title: "יש להתחבר כדי להמשיך",
+      title: "הרשמה או התחברות",
       defaultSub:
-        "פעולה זו זמינה למשתמשים מחוברים בלבד. התחברו כעת באמצעות אימייל או מספר טלפון, או צרו חשבון חדש.",
+        "פעולה זו זמינה למשתמשים מחוברים בלבד. בחרו הרשמה או התחברות למטה:",
       actionPrefix: "כדי ",
-      actionSuffix: ", יש להתחבר או להשלים הרשמה תחילה.",
-      byEmail: "אימייל",
-      byPhone: "מספר טלפון",
-      emailLabel: "כתובת האימייל שאיתה נרשמתם:",
-      phoneLabel: "בחרו קידומת מדינה והזינו מספר טלפון:",
+      actionSuffix: ", יש להירשם או להתחבר תחילה:",
+      registrationBtn: "הרשמה (Registration)",
+      signInChoiceBtn: "התחברות (Sign In)",
+      backToChoices: "→ חזרה",
+      step1: "1. איך תרצו להזדהות?",
+      byEmail: "באמצעות אימייל",
+      byPhone: "באמצעות מספר טלפון",
+      emailLabel: "2. הקלידו את כתובת האימייל שלכם:",
+      phoneLabel: "2. בחרו קידומת מדינה והקלידו מספר טלפון:",
       signInBtn: "התחברות כעת",
       checking: "בודק חשבון...",
-      noAccountYet: "עדיין אין לכם חשבון במערכת?",
-      registerBtn: "יצירת חשבון חדש (מעבר למסך הרשמה)",
-      openFullLogin: "מעבר לדף ההתחברות המלא",
       cancelBtn: "ביטול",
       notFoundTitle: "החשבון עדיין לא רשום במערכת!",
       notFoundBody:
@@ -254,43 +258,86 @@ export default function AuthPromptModal() {
                     <span>{t.completeRegBtn}</span>
                   </button>
                 </div>
+              ) : !showSignInForm ? (
+                /* Simple 2-Button View: 1) Registration, 2) Sign In */
+                <div className="space-y-3 pt-1">
+                  <Link
+                    href="/onboarding"
+                    onClick={handleClose}
+                    className="w-full min-h-[56px] px-5 py-3 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] text-white font-extrabold text-base sm:text-lg shadow-lg flex items-center justify-center gap-2.5 transition-all"
+                  >
+                    <UserPlus className="w-5 h-5 shrink-0" />
+                    <span>{t.registrationBtn}</span>
+                    <ForwardArrow className="w-5 h-5 shrink-0" />
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSignInForm(true);
+                      setErrorMsg(null);
+                    }}
+                    className="w-full min-h-[56px] px-5 py-3 rounded-2xl bg-[#4A148C] hover:bg-[#380E6B] text-white font-extrabold text-base sm:text-lg shadow-md flex items-center justify-center gap-2.5 transition-all"
+                  >
+                    <LogIn className="w-5 h-5 shrink-0" />
+                    <span>{t.signInChoiceBtn}</span>
+                  </button>
+                </div>
               ) : (
                 <form onSubmit={handleQuickLogin} className="space-y-4" noValidate>
-                  {/* Method Toggle */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div>
                     <button
                       type="button"
                       onClick={() => {
-                        setMethod("email");
-                        setIdentifier("");
+                        setShowSignInForm(false);
                         setErrorMsg(null);
                       }}
-                      className={`min-h-[44px] px-3 rounded-xl font-extrabold text-xs sm:text-sm border-2 flex items-center justify-center gap-2 transition-all ${
-                        method === "email"
-                          ? "bg-[#4A148C] text-white border-[#4A148C] shadow-sm"
-                          : "bg-white text-slate-800 border-slate-300 hover:border-slate-500"
-                      }`}
+                      className="text-xs sm:text-sm font-extrabold text-[#4A148C] hover:underline"
                     >
-                      <Mail className="w-4 h-4 shrink-0" />
-                      <span>{t.byEmail}</span>
+                      {t.backToChoices}
                     </button>
+                  </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMethod("phone");
-                        setIdentifier("");
-                        setErrorMsg(null);
-                      }}
-                      className={`min-h-[44px] px-3 rounded-xl font-extrabold text-xs sm:text-sm border-2 flex items-center justify-center gap-2 transition-all ${
-                        method === "phone"
-                          ? "bg-[#4A148C] text-white border-[#4A148C] shadow-sm"
-                          : "bg-white text-slate-800 border-slate-300 hover:border-slate-500"
-                      }`}
-                    >
-                      <Smartphone className="w-4 h-4 shrink-0" />
-                      <span>{t.byPhone}</span>
-                    </button>
+                  {/* Step 1: Method Toggle */}
+                  <div className="space-y-2">
+                    <span className="block text-xs sm:text-sm font-extrabold text-slate-900">
+                      {t.step1}
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMethod("email");
+                          setIdentifier("");
+                          setErrorMsg(null);
+                        }}
+                        className={`min-h-[44px] px-3 rounded-xl font-extrabold text-xs sm:text-sm border-2 flex items-center justify-center gap-2 transition-all ${
+                          method === "email"
+                            ? "bg-[#4A148C] text-white border-[#4A148C] shadow-sm"
+                            : "bg-white text-slate-800 border-slate-300 hover:border-slate-500"
+                        }`}
+                      >
+                        <Mail className="w-4 h-4 shrink-0" />
+                        <span>{t.byEmail}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMethod("phone");
+                          setIdentifier("");
+                          setErrorMsg(null);
+                        }}
+                        className={`min-h-[44px] px-3 rounded-xl font-extrabold text-xs sm:text-sm border-2 flex items-center justify-center gap-2 transition-all ${
+                          method === "phone"
+                            ? "bg-[#4A148C] text-white border-[#4A148C] shadow-sm"
+                            : "bg-white text-slate-800 border-slate-300 hover:border-slate-500"
+                        }`}
+                      >
+                        <Smartphone className="w-4 h-4 shrink-0" />
+                        <span>{t.byPhone}</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Input */}
@@ -365,36 +412,15 @@ export default function AuthPromptModal() {
                 </form>
               )}
 
-              {/* Divider + Direct Links to Registration & Full Login Page */}
-              <div className="pt-3 border-t border-slate-200 space-y-2.5">
-                <p className="text-xs font-bold text-slate-600 text-center">
-                  {t.noAccountYet}
-                </p>
-                <Link
-                  href="/onboarding"
+              {/* Bottom Cancel Button */}
+              <div className="pt-2 border-t border-slate-200 flex items-center justify-end">
+                <button
+                  type="button"
                   onClick={handleClose}
-                  className="w-full min-h-[46px] px-4 py-2 rounded-xl bg-purple-100 hover:bg-purple-200 border-2 border-[#4A148C] text-[#4A148C] font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors"
+                  className="text-xs font-bold text-slate-500 hover:text-slate-800"
                 >
-                  <UserPlus className="w-4 h-4 shrink-0" />
-                  <span>{t.registerBtn}</span>
-                </Link>
-
-                <div className="flex items-center justify-between pt-1">
-                  <Link
-                    href="/login"
-                    onClick={handleClose}
-                    className="text-xs font-bold text-[#4A148C] hover:underline"
-                  >
-                    {t.openFullLogin}
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="text-xs font-bold text-slate-500 hover:text-slate-800"
-                  >
-                    {t.cancelBtn}
-                  </button>
-                </div>
+                  {t.cancelBtn}
+                </button>
               </div>
             </div>
           </motion.div>
