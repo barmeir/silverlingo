@@ -101,7 +101,7 @@ export default function WelcomeGuideModal() {
               "בחרו את מדינת המגורים שלכם (ובארה״ב גם את המדינה — State, כמו New York או California).",
             highlights: [
               "המערכת מזהה אוטומטית את אזור הזמן המדויק שלכם (כולל שעון קיץ)",
-              "פגישה ב-10:00 בניו יורק תוצג אוטומטית כ-7:00 בקליפורניה!",
+              "20:00 בישראל = 10:00 בניו יורק = 7:00 בקליפורניה באופן אוטומטי!",
               "כל משתתף רואה את כל השעות לפי השעון המקומי שלו",
             ],
             icon: Globe2,
@@ -168,7 +168,7 @@ export default function WelcomeGuideModal() {
               "Select your Country of Residence (and your US State if you live in the United States, e.g., New York or California).",
             highlights: [
               "Automatically detects and applies your exact local time zone",
-              "A 10:00 AM meeting in New York automatically displays as 7:00 AM in California",
+              "20:00 Israel = 10:00 AM New York = 7:00 AM California automatically",
               "Automatically adjusts for Daylight Saving Time",
             ],
             icon: Globe2,

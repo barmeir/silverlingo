@@ -38,7 +38,7 @@ export default function HomePage() {
         "SilverLingo connects retired native English speakers seeking warm conversation with teenagers worldwide practicing spoken English—matched automatically by shared passions and local time zones.",
       communityTitle: "Meet Arthur (NY), Eleanor (UK), Walter (CA) & Mateo",
       communitySub:
-        "Automatic timezone conversion (10:00 AM NY = 7:00 AM CA) + SMS & Email reminders",
+        "Automatic timezone conversion (20:00 Israel = 10:00 AM NY = 7:00 AM CA) + SMS & Email reminders",
       ctaPrimary: "Complete User Registration",
       noPassword: "Password-free registration with Email, Phone & Camera Photo",
       seniorBadge: "For Senior Hosts (WCAG AAA)",
@@ -67,7 +67,7 @@ export default function HomePage() {
         "SilverLingo מחברת בין אזרחים ותיקים דוברי אנגלית שפת אם המחפשים שיחה חמה ומשמעותית, לבין בני נוער שרוצים לתרגל אנגלית מדוברת — בהתאמה אישית לפי תחביבים ואזורי זמן.",
       communityTitle: "הכירו את ארתור (ניו יורק), אלינור, וולטר (קליפורניה) ומתיאו",
       communitySub:
-        "המרת אזורי זמן אוטומטית (10:00 בניו יורק = 7:00 בקליפורניה) + התראות SMS ואימייל",
+        "המרת אזורי זמן אוטומטית (20:00 ישראל = 10:00 ניו יורק = 7:00 קליפורניה) + התראות SMS ואימייל",
       ctaPrimary: "מעבר למסך ההרשמה למערכת",
       noPassword: "הרשמה מהירה ללא סיסמה עם אימייל, טלפון וצילום תמונת פרופיל",
       seniorBadge: "למארחים ותיקים (נגישות WCAG AAA)",

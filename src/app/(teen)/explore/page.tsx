@@ -551,8 +551,8 @@ export default function TeenExplorePage() {
 
             <p className="text-[11px] text-purple-200/80 leading-snug">
               {lang === "he"
-                ? "דוגמה: שיחה ב-10:00 בניו יורק מוצגת אוטומטית כ-7:00 בקליפורניה!"
-                : "Example: Arthur's 10:00 AM New York slot automatically displays as 7:00 AM when viewing from California!"}
+                ? "דוגמה: שיחה ב-20:00 בישראל מוצגת אוטומטית כ-10:00 בניו יורק וכ-7:00 בקליפורניה!"
+                : "Example: 20:00 Israel = 10:00 AM New York = 7:00 AM California automatically!"}
             </p>
           </div>
         </div>
