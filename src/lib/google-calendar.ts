@@ -26,10 +26,11 @@ export async function generateCentralGoogleMeetLink({
   );
   const calendarId = process.env.GOOGLE_CENTRAL_CALENDAR_ID || "primary";
 
-  // Graceful fallback for local development when credentials are not yet set
+  // Graceful fallback when Google Workspace Service Account is not configured:
+  // Generate a real, zero-login WebRTC video room URL that works immediately on mobile & desktop
   if (!clientEmail || !privateKey || privateKey.includes("...")) {
-    const mockCode = crypto.randomBytes(4).toString("hex");
-    return `https://meet.google.com/slv-${mockCode.slice(0, 4)}-${mockCode.slice(4, 8)}`;
+    const roomCode = crypto.randomBytes(4).toString("hex");
+    return `https://meet.ffmuc.net/SilverLingo-${roomCode}`;
   }
 
   const auth = new google.auth.JWT({

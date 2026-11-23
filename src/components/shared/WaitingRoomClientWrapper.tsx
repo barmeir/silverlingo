@@ -97,7 +97,7 @@ export default function WaitingRoomClientWrapper({
   const googleMeetLink =
     searchParams.get("meet") ||
     matchedMeeting?.googleMeetLink ||
-    "https://meet.jit.si/SilverLingo-LiveRoom";
+    "https://meet.ffmuc.net/SilverLingo-LiveRoom";
   const aiIcebreaker =
     searchParams.get("icebreaker") ||
     matchedMeeting?.aiIcebreaker ||

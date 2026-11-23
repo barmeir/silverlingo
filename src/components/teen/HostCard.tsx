@@ -153,7 +153,7 @@ export default function HostCard({
       );
       const scheduledEnd = endDate.toISOString();
 
-      let googleMeetLink = `https://meet.jit.si/SilverLingo-${meetingId.slice(
+      let googleMeetLink = `https://meet.ffmuc.net/SilverLingo-${meetingId.slice(
         0,
         8
       )}`;
