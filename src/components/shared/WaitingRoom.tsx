@@ -7,6 +7,7 @@ import { formatUTCInZone, safeTimeZone } from "@/lib/timezone";
 import { useLanguage } from "@/context/LanguageContext";
 import { useUserProfile } from "@/context/UserProfileContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
+import { openAuthPromptModal } from "@/components/shared/AuthPromptModal";
 import { withBasePath } from "@/lib/assets";
 import {
   buildParticipantMessages,
@@ -153,6 +154,10 @@ export default function WaitingRoom({
 
   const handleRescheduleClick = async () => {
     if (!isSignedIn) {
+      openAuthPromptModal({
+        actionLabelEn: "reschedule this meeting",
+        actionLabelHe: "לשנות את מועד הפגישה",
+      });
       setActionBanner(
         lang === "he"
           ? "לא ניתן לשנות מועד פגישה ללא משתמש מחובר. יש להתחבר או להירשם תחילה."
@@ -205,6 +210,10 @@ export default function WaitingRoom({
 
   const handleCancelClick = async () => {
     if (!isSignedIn) {
+      openAuthPromptModal({
+        actionLabelEn: "cancel this meeting",
+        actionLabelHe: "לבטל את הפגישה",
+      });
       setActionBanner(
         lang === "he"
           ? "לא ניתן לבטל פגישה ללא משתמש מחובר. יש להתחבר או להירשם תחילה."
@@ -623,6 +632,15 @@ export default function WaitingRoom({
                 href={googleMeetLink}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => {
+                  if (!isSignedIn) {
+                    e.preventDefault();
+                    openAuthPromptModal({
+                      actionLabelEn: "join the 1-on-1 video call room",
+                      actionLabelHe: "להצטרף לחדר שיחת הווידאו",
+                    });
+                  }
+                }}
                 className="w-full min-h-[70px] sm:min-h-[80px] px-6 py-4 rounded-3xl bg-[#FF6D00] hover:bg-[#E65100] active:scale-[0.99] text-white font-extrabold text-xl sm:text-[28px] shadow-[0_18px_45px_-8px_rgba(255,109,0,0.7)] flex items-center justify-center gap-3 text-center transition-all"
               >
                 <Video className="w-7 h-7 sm:w-8 sm:h-8 shrink-0" />

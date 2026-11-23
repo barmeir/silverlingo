@@ -11,6 +11,7 @@ import {
 } from "@/lib/timezone";
 import { useLanguage } from "@/context/LanguageContext";
 import { useUserProfile } from "@/context/UserProfileContext";
+import { openAuthPromptModal } from "@/components/shared/AuthPromptModal";
 import {
   Sunrise,
   Sun,
@@ -209,6 +210,13 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
   );
 
   const handlePointerDown = (key: string) => {
+    if (!isSignedIn) {
+      openAuthPromptModal({
+        actionLabelEn: "select and save your weekly availability slots",
+        actionLabelHe: "לבחור ולשמור את משבצות הזמינות השבועיות שלך",
+      });
+      return;
+    }
     const currentlySelected = selectedSlots.has(key);
     const nextMode = currentlySelected ? "erase" : "paint";
     setIsDragging(true);
@@ -234,6 +242,10 @@ export default function AvailabilityCalendar({ hostId }: { hostId: string }) {
 
   const handleSaveAvailability = async () => {
     if (!isSignedIn || !profile) {
+      openAuthPromptModal({
+        actionLabelEn: "save your weekly availability schedule",
+        actionLabelHe: "לשמור את יומן הזמינות השבועי שלך",
+      });
       setAuthError(
         lang === "he"
           ? "לא ניתן לשמור או לקבוע יומן פגישות ללא משתמש מחובר. יש להתחבר או להירשם תחילה."

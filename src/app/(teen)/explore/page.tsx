@@ -9,6 +9,7 @@ import {
   useUserProfile,
   PREDEFINED_HOBBIES,
 } from "@/context/UserProfileContext";
+import { openAuthPromptModal } from "@/components/shared/AuthPromptModal";
 import { withBasePath } from "@/lib/assets";
 import {
   nextWallTimeInZoneToUTCISO,
@@ -390,6 +391,13 @@ export default function TeenExplorePage() {
   };
 
   const handleReschedule = async (meetingId: string, currentStart: string) => {
+    if (!isSignedIn) {
+      openAuthPromptModal({
+        actionLabelEn: "reschedule a meeting",
+        actionLabelHe: "לשנות מועד פגישה",
+      });
+      return;
+    }
     // Move meeting 1 hour later and automatically notify both participants
     const nextStart = new Date(
       new Date(currentStart).getTime() + 60 * 60 * 1000
@@ -410,6 +418,13 @@ export default function TeenExplorePage() {
   };
 
   const handleCancel = async (meetingId: string) => {
+    if (!isSignedIn) {
+      openAuthPromptModal({
+        actionLabelEn: "cancel a meeting",
+        actionLabelHe: "לבטל פגישה",
+      });
+      return;
+    }
     const canceled = await cancelMeeting(meetingId);
     if (canceled) {
       setStatusFeedback(

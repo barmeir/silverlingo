@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, Heebo } from "next/font/google";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { UserProfileProvider } from "@/context/UserProfileContext";
 import WelcomeGuideModal from "@/components/shared/WelcomeGuideModal";
+import AuthPromptModal from "@/components/shared/AuthPromptModal";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -35,6 +36,7 @@ export default function RootLayout({
         <LanguageProvider>
           <UserProfileProvider>
             {children}
+            <AuthPromptModal />
             <WelcomeGuideModal />
           </UserProfileProvider>
         </LanguageProvider>
