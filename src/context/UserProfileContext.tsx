@@ -414,6 +414,18 @@ export function UserProfileProvider({
 
         if (authUser?.id) {
           finalProfile.id = authUser.id;
+        } else if (finalProfile.email || finalProfile.phone) {
+          // Check if a user with this email or phone is already in public.users so we update their existing row
+          let existingQuery = supabase.from("users").select("id");
+          if (finalProfile.email) {
+            existingQuery = existingQuery.ilike("email", finalProfile.email);
+          } else if (finalProfile.phone) {
+            existingQuery = existingQuery.eq("phone", finalProfile.phone);
+          }
+          const { data: existingRows } = await existingQuery.limit(1);
+          if (existingRows?.[0]?.id) {
+            finalProfile.id = existingRows[0].id;
+          }
         }
 
         const { error: extError } = await supabase.from("users").upsert({
@@ -430,9 +442,7 @@ export function UserProfileProvider({
             : finalProfile.city,
           former_role: finalProfile.formerRole,
           bio: finalProfile.bio,
-          avatar_url: finalProfile.avatarUrl.startsWith("data:")
-            ? "/avatars/mateo.png"
-            : finalProfile.avatarUrl,
+          avatar_url: finalProfile.avatarUrl || "/avatars/mateo.png",
         });
 
         if (extError) {
