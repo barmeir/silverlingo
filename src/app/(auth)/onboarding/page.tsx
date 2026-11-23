@@ -543,8 +543,6 @@ function OnboardingFormContent() {
       alreadyRegistered: "Already Registered? Sign In",
       pill: "User Registration & Identification",
       title: "Create Your SilverLingo Account",
-      subtitle:
-        "No password required. Register with your Email, Country Calling Code + Phone, Photo, and Location for automatic Time Zone matching.",
       step1: "1. Choose Your Role:",
       teenTitle: "🎧 Teen Learner",
       teenDesc: "Practice spoken English with native-speaking senior hosts",
@@ -592,8 +590,6 @@ function OnboardingFormContent() {
       alreadyRegistered: "כבר רשומים? התחברות",
       pill: "הרשמה וזיהוי משתמש",
       title: "יצירת חשבון ב-SilverLingo",
-      subtitle:
-        "ללא צורך בסיסמה. הירשמו עם אימייל, קידומת מדינה + מספר טלפון, תמונת פרופיל ומיקום לזיהוי אוטומטי של אזור הזמן.",
       step1: "1. בחרו את התפקיד שלכם:",
       teenTitle: "🎧 תלמיד/ה (Teen Learner)",
       teenDesc: "תרגול אנגלית מדוברת עם מארחים דוברי אנגלית שפת אם",
@@ -675,10 +671,6 @@ function OnboardingFormContent() {
             <h1 className="text-2xl sm:text-[36px] font-extrabold leading-tight text-slate-950 tracking-tight">
               {t.title}
             </h1>
-
-            <p className="text-base sm:text-[19px] text-slate-700 leading-relaxed">
-              {t.subtitle}
-            </p>
           </header>
 
           <form onSubmit={handleSubmit} className="space-y-7 sm:space-y-8" noValidate>
