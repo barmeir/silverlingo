@@ -115,8 +115,7 @@ export default function WelcomeGuideModal() {
           {
             badge: "שלב 2 מתוך 4 • מיקום ואזור זמן",
             title: "המרת אזורי זמן אוטומטית",
-            description:
-              "בחרו את מדינת המגורים שלכם (ובארה״ב גם את המדינה — State, כמו New York או California).",
+            description: "בחרו את מדינת המגורים שלכם.",
             highlights: [
               "המערכת מזהה אוטומטית את אזור הזמן המדויק שלכם (כולל שעון קיץ)",
               "20:00 בישראל = 10:00 בניו יורק = 7:00 בקליפורניה באופן אוטומטי!",
@@ -182,8 +181,7 @@ export default function WelcomeGuideModal() {
           {
             badge: "Step 2 of 4 • Country, State & Time Zone",
             title: "Automatic Time Zone Conversion (Including DST)",
-            description:
-              "Select your Country of Residence (and your US State if you live in the United States, e.g., New York or California).",
+            description: "Select your Country of Residence.",
             highlights: [
               "Automatically detects and applies your exact local time zone",
               "20:00 Israel = 10:00 AM New York = 7:00 AM California automatically",
