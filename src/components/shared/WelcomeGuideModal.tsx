@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
 import { useUserProfile } from "@/context/UserProfileContext";
@@ -29,6 +30,7 @@ export function openWelcomeGuide() {
 }
 
 export default function WelcomeGuideModal() {
+  const pathname = usePathname();
   const { lang, isRTL } = useLanguage();
   const { profile } = useUserProfile();
   const [isOpen, setIsOpen] = useState(false);
@@ -38,15 +40,6 @@ export default function WelcomeGuideModal() {
   const PrevArrow = isRTL ? ArrowRight : ArrowLeft;
 
   useEffect(() => {
-    try {
-      const seen = window.localStorage.getItem(STORAGE_GUIDE_KEY);
-      if (!seen) {
-        setIsOpen(true);
-      }
-    } catch {
-      setIsOpen(true);
-    }
-
     const handleOpenEvent = () => {
       setStepIndex(0);
       setIsOpen(true);
@@ -57,6 +50,31 @@ export default function WelcomeGuideModal() {
       window.removeEventListener("silverlingo:open-guide", handleOpenEvent);
     };
   }, []);
+
+  useEffect(() => {
+    // Only auto-popup on the main screen ("/") after 6 seconds for first-time visitors
+    const isMainScreen =
+      pathname === "/" || pathname === "/silverlingo" || pathname === "/silverlingo/";
+    if (!isMainScreen) return;
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      const seen = window.localStorage.getItem(STORAGE_GUIDE_KEY);
+      if (!seen) {
+        timer = setTimeout(() => {
+          setIsOpen(true);
+        }, 6000);
+      }
+    } catch {
+      timer = setTimeout(() => {
+        setIsOpen(true);
+      }, 6000);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [pathname]);
 
   const handleCloseOrSkip = () => {
     try {
