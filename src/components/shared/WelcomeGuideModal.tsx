@@ -100,13 +100,14 @@ export default function WelcomeGuideModal() {
             accent: "from-[#4A148C] to-purple-700",
           },
           {
-            badge: "",
-            title: "הרשמה",
+            badge: "שלב 1 מתוך 4 • הרשמה וזיהוי",
+            title: "הרשמה מהירה עם תמונת פרופיל (ללא סיסמה)",
             description:
-              "כדי לקבוע פגישה יש להתחבר. יצירת החשבון אורכת פחות מדקה — ללא צורך בסיסמה!",
+              "כדי לקבוע פגישה במערכת יש להירשם ולהתחבר. אין צורך לזכור סיסמה!",
             highlights: [
               "הזינו כתובת אימייל, בחרו קידומת מדינה והזינו מספר טלפון נייד",
-              "תמונת פרופיל",
+              "חובה להוסיף תמונת פרופיל: העלאה מהמכשיר או צילום ישיר במצלמה",
+              "לא ניתן לקבוע פגישה ללא משתמש מחובר",
             ],
             icon: Camera,
             accent: "from-[#FF6D00] to-amber-600",
@@ -166,13 +167,14 @@ export default function WelcomeGuideModal() {
             accent: "from-[#4A148C] to-purple-700",
           },
           {
-            badge: "",
-            title: "Registration",
+            badge: "Step 1 of 4 • Registration & Sign-In",
+            title: "Password-Free Registration & Mandatory Profile Photo",
             description:
-              "To schedule a meeting, signed in. Creating your account takes less than a minute—no password needed!",
+              "To schedule a meeting, you must be signed in. Creating your account takes less than a minute—no password needed!",
             highlights: [
               "Enter your Email Address and select your Country Calling Code + Phone Number",
-              "Profile Photo",
+              "Upload a profile picture from your device OR take a live photo with your camera",
+              "Scheduling is locked until a user is signed in",
             ],
             icon: Camera,
             accent: "from-[#FF6D00] to-amber-600",
@@ -287,11 +289,9 @@ export default function WelcomeGuideModal() {
                     <StepIcon className="w-5 h-5 text-white" />
                   </div>
                   <div className="min-w-0">
-                    {currentStep.badge && (
-                      <span className="block text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-amber-200 truncate">
-                        {currentStep.badge}
-                      </span>
-                    )}
+                    <span className="block text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-amber-200 truncate">
+                      {currentStep.badge}
+                    </span>
                     <span className="block text-xs text-white/85 font-semibold">
                       {t.stepCounter}
                     </span>
