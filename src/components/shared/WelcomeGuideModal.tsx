@@ -114,7 +114,7 @@ export default function WelcomeGuideModal() {
           },
           {
             badge: "שלב 2 מתוך 4 • מיקום ואזור זמן",
-            title: "המרת אזורי זמן אוטומטית לכל משתתף",
+            title: "המרת אזורי זמן אוטומטית",
             description:
               "בחרו את מדינת המגורים שלכם (ובארה״ב גם את המדינה — State, כמו New York או California).",
             highlights: [
