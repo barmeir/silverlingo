@@ -737,6 +737,7 @@ export default function WaitingRoom({
                   roomSlug={roomSlug}
                   myDisplayName={activeDisplayName}
                   partnerDisplayName={partnerDisplayName}
+                  aiIcebreaker={aiIcebreaker}
                   onLeave={() => setInCall(false)}
                 />
               )}

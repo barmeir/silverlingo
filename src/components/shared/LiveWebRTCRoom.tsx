@@ -21,6 +21,7 @@ interface LiveWebRTCRoomProps {
   roomSlug: string;
   myDisplayName: string;
   partnerDisplayName: string;
+  aiIcebreaker?: string;
   onLeave: () => void;
 }
 
@@ -37,6 +38,7 @@ export default function LiveWebRTCRoom({
   roomSlug,
   myDisplayName,
   partnerDisplayName,
+  aiIcebreaker,
   onLeave,
 }: LiveWebRTCRoomProps) {
   const { lang } = useLanguage();
@@ -422,192 +424,204 @@ export default function LiveWebRTCRoom({
   };
 
   return (
-    <div className="rounded-3xl bg-slate-950 text-white border-4 border-[#4A148C] overflow-hidden shadow-2xl">
-      {/* Top Status Bar */}
-      <div className="p-3.5 sm:p-4 bg-gradient-to-r from-[#2A0854] via-[#4A148C] to-[#1A0436] flex flex-wrap items-center justify-between gap-3 border-b border-white/15">
-        <div className="flex items-center gap-2.5">
-          <span
-            className={`w-3 h-3 rounded-full ${
-              remoteConnected
-                ? "bg-emerald-400 animate-ping"
-                : "bg-amber-400 animate-pulse"
-            }`}
-          />
-          <span className="font-extrabold text-sm sm:text-base text-white">
-            {t.liveHeader}
-          </span>
-        </div>
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md p-1.5 sm:p-3 md:p-5 flex flex-col">
+      <div className="w-full h-full flex-1 min-h-0 rounded-2xl sm:rounded-3xl bg-slate-950 text-white border-2 sm:border-4 border-[#4A148C] overflow-hidden shadow-[0_30px_100px_rgba(0,0,0,0.95)] flex flex-col justify-between">
+        {/* Top Status & AI Icebreaker Bar */}
+        <div className="px-4 py-3 bg-gradient-to-r from-[#2A0854] via-[#4A148C] to-[#1A0436] flex flex-wrap items-center justify-between gap-3 border-b border-white/15 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <span
+              className={`w-3.5 h-3.5 rounded-full ${
+                remoteConnected
+                  ? "bg-emerald-400 animate-ping"
+                  : "bg-amber-400 animate-pulse"
+              }`}
+            />
+            <span className="font-extrabold text-sm sm:text-lg text-white">
+              {t.liveHeader}
+            </span>
+          </div>
 
-        <div
-          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold ${
-            remoteConnected
-              ? "bg-emerald-500/20 border border-emerald-400/40 text-emerald-200"
-              : "bg-amber-500/20 border border-amber-400/40 text-amber-200"
-          }`}
-        >
-          <Users className="w-3.5 h-3.5" />
-          <span>{remoteConnected ? t.connectedBadge : t.waitingBadge}</span>
-        </div>
-      </div>
-
-      {mediaError && (
-        <div className="p-4 bg-red-950/90 border-b border-red-500/40 text-red-200 text-xs sm:text-sm font-bold text-center">
-          ⚠️ {mediaError}
-        </div>
-      )}
-
-      {/* Dual Video Stage (Local Camera + Remote Participant Video) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 sm:p-4 bg-slate-900">
-        {/* Local Participant Video Feed */}
-        <div className="relative aspect-video rounded-2xl overflow-hidden bg-black border-2 border-[#FF6D00] shadow-lg">
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className={`w-full h-full object-cover ${
-              facingMode === "user" ? "scale-x-[-1]" : ""
-            } ${!cameraEnabled ? "opacity-0" : "opacity-100"}`}
-          />
-          {!cameraEnabled && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-slate-400 gap-2">
-              <VideoOff className="w-10 h-10 text-[#FF6D00]" />
-              <span className="text-xs font-bold">{t.youLabel}</span>
+          {aiIcebreaker && (
+            <div
+              dir="ltr"
+              className="hidden xl:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs sm:text-sm font-bold text-purple-100 max-w-xl truncate"
+            >
+              <Sparkles className="w-4 h-4 text-[#FF6D00] shrink-0" />
+              <span className="truncate">“{aiIcebreaker}”</span>
             </div>
           )}
-          <div className="absolute bottom-2.5 left-2.5 px-3 py-1 rounded-xl bg-black/70 backdrop-blur-md border border-white/15 text-white text-xs font-extrabold flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span>{t.youLabel}</span>
+
+          <div
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-extrabold ${
+              remoteConnected
+                ? "bg-emerald-500/20 border border-emerald-400/40 text-emerald-200"
+                : "bg-amber-500/20 border border-amber-400/40 text-amber-200"
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>{remoteConnected ? t.connectedBadge : t.waitingBadge}</span>
           </div>
         </div>
 
-        {/* Remote Participant Video Feed */}
-        <div className="relative aspect-video rounded-2xl overflow-hidden bg-slate-950 border-2 border-purple-400/50 shadow-lg flex items-center justify-center">
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            playsInline
-            className={`w-full h-full object-cover ${
-              remoteConnected ? "opacity-100" : "opacity-0"
-            }`}
-          />
+        {mediaError && (
+          <div className="p-3 bg-red-950/90 border-b border-red-500/40 text-red-200 text-xs sm:text-sm font-bold text-center shrink-0">
+            ⚠️ {mediaError}
+          </div>
+        )}
 
-          {!remoteConnected && (
-            <div className="absolute inset-0 p-5 flex flex-col items-center justify-center text-center space-y-3 bg-gradient-to-b from-[#1E0B36] to-slate-950">
-              <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-[#FF6D00] animate-pulse" />
+        {/* Dual Full-Height Video Stage (Local Camera + Remote Participant Video) */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 p-2.5 sm:p-4 bg-slate-900">
+          {/* Local Participant Video Feed */}
+          <div className="relative w-full h-full min-h-[240px] rounded-2xl sm:rounded-3xl overflow-hidden bg-black border-2 sm:border-4 border-[#FF6D00] shadow-2xl">
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`w-full h-full object-cover ${
+                facingMode === "user" ? "scale-x-[-1]" : ""
+              } ${!cameraEnabled ? "opacity-0" : "opacity-100"}`}
+            />
+            {!cameraEnabled && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-slate-400 gap-2">
+                <VideoOff className="w-14 h-14 text-[#FF6D00]" />
+                <span className="text-sm font-bold">{t.youLabel}</span>
               </div>
-              <div className="space-y-1 max-w-xs">
-                <p className="text-sm sm:text-base font-extrabold text-white">
-                  {t.waitingOverlayTitle}
-                </p>
-                <p className="text-xs text-purple-200/80 leading-relaxed">
-                  {t.waitingOverlaySub}
-                </p>
+            )}
+            <div className="absolute bottom-3 left-3 px-3.5 py-1.5 rounded-xl bg-black/75 backdrop-blur-md border border-white/15 text-white text-xs sm:text-sm font-extrabold flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+              <span>{t.youLabel}</span>
+            </div>
+          </div>
+
+          {/* Remote Participant Video Feed */}
+          <div className="relative w-full h-full min-h-[240px] rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-950 border-2 sm:border-4 border-purple-400/50 shadow-2xl flex items-center justify-center">
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className={`w-full h-full object-cover ${
+                remoteConnected ? "opacity-100" : "opacity-0"
+              }`}
+            />
+
+            {!remoteConnected && (
+              <div className="absolute inset-0 p-6 flex flex-col items-center justify-center text-center space-y-4 bg-gradient-to-b from-[#1E0B36] to-slate-950">
+                <div className="w-16 h-16 rounded-3xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center">
+                  <Sparkles className="w-8 h-8 text-[#FF6D00] animate-pulse" />
+                </div>
+                <div className="space-y-1.5 max-w-md">
+                  <p className="text-lg sm:text-2xl font-extrabold text-white">
+                    {t.waitingOverlayTitle}
+                  </p>
+                  <p className="text-xs sm:text-sm text-purple-200/85 leading-relaxed">
+                    {t.waitingOverlaySub}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyInviteLink}
+                  className="min-h-[48px] px-5 py-2.5 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] text-white font-extrabold text-sm inline-flex items-center gap-2 shadow-lg transition-colors"
+                >
+                  {copiedLink ? (
+                    <Check className="w-5 h-5" />
+                  ) : (
+                    <Copy className="w-5 h-5" />
+                  )}
+                  <span>{copiedLink ? t.copiedBtn : t.copyInviteBtn}</span>
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleCopyInviteLink}
-                className="min-h-[40px] px-4 py-2 rounded-xl bg-[#FF6D00] hover:bg-[#E65100] text-white font-extrabold text-xs inline-flex items-center gap-1.5 shadow-md transition-colors"
-              >
-                {copiedLink ? (
-                  <Check className="w-4 h-4" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
-                <span>{copiedLink ? t.copiedBtn : t.copyInviteBtn}</span>
-              </button>
-            </div>
-          )}
-
-          {remoteConnected && (
-            <div className="absolute bottom-2.5 left-2.5 px-3 py-1 rounded-xl bg-black/70 backdrop-blur-md border border-white/15 text-white text-xs font-extrabold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span>{remotePeerName}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom Call Controls Bar */}
-      <div className="p-3.5 sm:p-4 bg-slate-950 border-t border-white/15 flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={toggleMic}
-            className={`min-h-[44px] px-3.5 py-2 rounded-xl font-extrabold text-xs sm:text-sm inline-flex items-center gap-1.5 transition-colors ${
-              micEnabled
-                ? "bg-white/10 hover:bg-white/20 text-white"
-                : "bg-red-600/80 hover:bg-red-600 text-white"
-            }`}
-          >
-            {micEnabled ? (
-              <Mic className="w-4 h-4 text-emerald-400" />
-            ) : (
-              <MicOff className="w-4 h-4" />
             )}
-            <span>{t.muteBtn}</span>
-          </button>
 
-          <button
-            type="button"
-            onClick={toggleCamera}
-            className={`min-h-[44px] px-3.5 py-2 rounded-xl font-extrabold text-xs sm:text-sm inline-flex items-center gap-1.5 transition-colors ${
-              cameraEnabled
-                ? "bg-white/10 hover:bg-white/20 text-white"
-                : "bg-red-600/80 hover:bg-red-600 text-white"
-            }`}
-          >
-            {cameraEnabled ? (
-              <Video className="w-4 h-4 text-emerald-400" />
-            ) : (
-              <VideoOff className="w-4 h-4" />
+            {remoteConnected && (
+              <div className="absolute bottom-3 left-3 px-3.5 py-1.5 rounded-xl bg-black/75 backdrop-blur-md border border-white/15 text-white text-xs sm:text-sm font-extrabold flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                <span>{remotePeerName}</span>
+              </div>
             )}
-            <span>{t.camBtn}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleFlipCamera}
-            className="min-h-[44px] px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm inline-flex items-center gap-1.5 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4 text-purple-300" />
-            <span>{t.flipBtn}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleCopyInviteLink}
-            className="min-h-[44px] px-3.5 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 text-purple-100 font-bold text-xs sm:text-sm inline-flex items-center gap-1.5 transition-colors"
-          >
-            {copiedLink ? (
-              <Check className="w-4 h-4 text-emerald-400" />
-            ) : (
-              <Copy className="w-4 h-4 text-purple-300" />
-            )}
-            <span>{copiedLink ? t.copiedBtn : t.copyInviteBtn}</span>
-          </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <a
-            href={`https://meet.jit.si/${roomSlug}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="min-h-[44px] px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 font-bold text-xs inline-flex items-center gap-1.5 transition-colors"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-amber-300" />
-            <span>{t.externalJitsiBtn}</span>
-          </a>
+        {/* Bottom Call Controls Bar */}
+        <div className="px-4 py-3.5 bg-slate-950 border-t border-white/15 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={toggleMic}
+              className={`min-h-[48px] px-4 py-2.5 rounded-2xl font-extrabold text-xs sm:text-sm inline-flex items-center gap-2 transition-colors ${
+                micEnabled
+                  ? "bg-white/10 hover:bg-white/20 text-white"
+                  : "bg-red-600/80 hover:bg-red-600 text-white"
+              }`}
+            >
+              {micEnabled ? (
+                <Mic className="w-5 h-5 text-emerald-400" />
+              ) : (
+                <MicOff className="w-5 h-5" />
+              )}
+              <span>{t.muteBtn}</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={onLeave}
-            className="min-h-[44px] px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs sm:text-sm inline-flex items-center gap-2 shadow-md transition-colors"
-          >
-            <PhoneOff className="w-4 h-4" />
-            <span>{t.leaveBtn}</span>
-          </button>
+            <button
+              type="button"
+              onClick={toggleCamera}
+              className={`min-h-[48px] px-4 py-2.5 rounded-2xl font-extrabold text-xs sm:text-sm inline-flex items-center gap-2 transition-colors ${
+                cameraEnabled
+                  ? "bg-white/10 hover:bg-white/20 text-white"
+                  : "bg-red-600/80 hover:bg-red-600 text-white"
+              }`}
+            >
+              {cameraEnabled ? (
+                <Video className="w-5 h-5 text-emerald-400" />
+              ) : (
+                <VideoOff className="w-5 h-5" />
+              )}
+              <span>{t.camBtn}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleFlipCamera}
+              className="min-h-[48px] px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm inline-flex items-center gap-2 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4 text-purple-300" />
+              <span>{t.flipBtn}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopyInviteLink}
+              className="min-h-[48px] px-4 py-2.5 rounded-2xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 text-purple-100 font-bold text-xs sm:text-sm inline-flex items-center gap-2 transition-colors"
+            >
+              {copiedLink ? (
+                <Check className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Copy className="w-4 h-4 text-purple-300" />
+              )}
+              <span>{copiedLink ? t.copiedBtn : t.copyInviteBtn}</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <a
+              href={`https://meet.jit.si/${roomSlug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="min-h-[48px] px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-slate-200 font-bold text-xs sm:text-sm inline-flex items-center gap-1.5 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-amber-300" />
+              <span>{t.externalJitsiBtn}</span>
+            </a>
+
+            <button
+              type="button"
+              onClick={onLeave}
+              className="min-h-[48px] px-5 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm sm:text-base inline-flex items-center gap-2 shadow-lg transition-colors"
+            >
+              <PhoneOff className="w-5 h-5" />
+              <span>{t.leaveBtn}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
