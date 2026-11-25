@@ -521,6 +521,7 @@ function OnboardingFormContent() {
         hobbies: selectedHobbies,
         contact: cleanEmail,
         timezone: resolvedTimezone,
+        registeredAt: profile?.registeredAt || new Date().toISOString(),
       });
 
       if (role === "elderly") {
@@ -663,9 +664,33 @@ function OnboardingFormContent() {
           className="w-full max-w-4xl mx-auto bg-[#FDFBF7] text-slate-950 rounded-3xl sm:rounded-[36px] p-4 sm:p-8 md:p-11 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.6)] border-2 border-white"
         >
           <header className="mb-6 sm:mb-8 space-y-2.5 border-b-2 border-slate-200 pb-5">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-100 border border-[#4A148C]/30 text-[#4A148C] font-extrabold text-sm sm:text-[16px]">
-              <Sparkles className="w-4 h-4 shrink-0" />
-              <span>{t.pill}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-100 border border-[#4A148C]/30 text-[#4A148C] font-extrabold text-sm sm:text-[16px]">
+                <Sparkles className="w-4 h-4 shrink-0" />
+                <span>{t.pill}</span>
+              </div>
+              {profile?.registeredAt && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-700 text-emerald-950 font-bold text-xs sm:text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>
+                    {lang === "he"
+                      ? `תאריך הרשמה ראשוני: ${
+                          formatUTCInZone(
+                            profile.registeredAt,
+                            resolvedTimezone,
+                            "he"
+                          ).dateLabel
+                        }`
+                      : `First Registered: ${
+                          formatUTCInZone(
+                            profile.registeredAt,
+                            resolvedTimezone,
+                            "en"
+                          ).dateLabel
+                        }`}
+                  </span>
+                </div>
+              )}
             </div>
 
             <h1 className="text-2xl sm:text-[36px] font-extrabold leading-tight text-slate-950 tracking-tight">

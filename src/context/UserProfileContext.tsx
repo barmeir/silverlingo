@@ -169,6 +169,7 @@ export interface UserProfile {
   contact?: string;
   timezone: string;
   firstLoginVerified?: boolean;
+  registeredAt?: string;
 }
 
 export interface ScheduledMeeting {
@@ -313,6 +314,7 @@ export function UserProfileProvider({
                     avatarUrl: row.avatar_url || "/avatars/arthur.png",
                     hobbies: ["Football / Soccer", "Classic Movies & Marvel"],
                     timezone: row.timezone || "America/New_York",
+                    registeredAt: row.created_at || undefined,
                   });
                 }
               });
@@ -391,6 +393,10 @@ export function UserProfileProvider({
                     dbUser.country || "United States",
                     prev?.usState
                   ),
+                registeredAt:
+                  dbUser.created_at ||
+                  prev?.registeredAt ||
+                  new Date().toISOString(),
               };
               window.localStorage.setItem(
                 STORAGE_PROFILE_KEY,
@@ -409,10 +415,16 @@ export function UserProfileProvider({
       newProfile.usState
     );
 
+    const initialRegisteredAt =
+      newProfile.registeredAt ||
+      profile?.registeredAt ||
+      new Date().toISOString();
+
     let finalProfile: UserProfile = {
       ...newProfile,
       id: ensureValidUuid(newProfile.id),
       timezone: computedTz,
+      registeredAt: initialRegisteredAt,
     };
 
     if (isSupabaseConfigured()) {
@@ -425,8 +437,10 @@ export function UserProfileProvider({
         if (authUser?.id) {
           finalProfile.id = authUser.id;
         } else if (finalProfile.email || finalProfile.phone) {
-          // Check if a user with this email or phone is already in public.users so we update their existing row
-          let existingQuery = supabase.from("users").select("id");
+          // Check if a user with this email or phone is already in public.users so we update their existing row & preserve original registration date
+          let existingQuery = supabase
+            .from("users")
+            .select("id, created_at");
           if (finalProfile.email) {
             existingQuery = existingQuery.ilike("email", finalProfile.email);
           } else if (finalProfile.phone) {
@@ -435,6 +449,9 @@ export function UserProfileProvider({
           const { data: existingRows } = await existingQuery.limit(1);
           if (existingRows?.[0]?.id) {
             finalProfile.id = existingRows[0].id;
+            if (existingRows[0].created_at) {
+              finalProfile.registeredAt = existingRows[0].created_at;
+            }
           }
         }
 
@@ -453,6 +470,7 @@ export function UserProfileProvider({
           former_role: finalProfile.formerRole,
           bio: finalProfile.bio,
           avatar_url: finalProfile.avatarUrl || "/avatars/mateo.png",
+          created_at: finalProfile.registeredAt,
         });
 
         if (extError) {
@@ -463,6 +481,7 @@ export function UserProfileProvider({
             timezone: finalProfile.timezone,
             age: finalProfile.age,
             country: finalProfile.country,
+            created_at: finalProfile.registeredAt,
           });
         }
 
@@ -648,6 +667,10 @@ export function UserProfileProvider({
             contact: dbUser.email || dbUser.phone,
             timezone:
               dbUser.timezone || localMatch?.timezone || "America/New_York",
+            registeredAt:
+              dbUser.created_at ||
+              localMatch?.registeredAt ||
+              new Date().toISOString(),
           };
 
           const alreadyVerified = isUserFirstLoginVerified(
