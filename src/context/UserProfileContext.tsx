@@ -168,6 +168,7 @@ export interface UserProfile {
   hobbies: string[];
   contact?: string;
   timezone: string;
+  firstLoginVerified?: boolean;
 }
 
 export interface ScheduledMeeting {
@@ -202,6 +203,14 @@ interface UserProfileContextValue {
     email?: string;
     phoneE164?: string;
   }) => Promise<UserProfile | null>;
+  lookupUserForLogin: (params: {
+    email?: string;
+    phoneE164?: string;
+  }) => Promise<{
+    user: UserProfile;
+    requiresFirstLoginVerification: boolean;
+  } | null>;
+  completeFirstLoginVerification: (user: UserProfile) => Promise<UserProfile>;
   recordMeetingBooked: (meeting: ScheduledMeeting) => Promise<void>;
   rescheduleMeeting: (
     meetingId: string,
@@ -213,6 +222,7 @@ interface UserProfileContextValue {
 
 const STORAGE_PROFILE_KEY = "silverlingo_user_profile";
 const STORAGE_ACCOUNTS_KEY = "silverlingo_registered_accounts";
+const STORAGE_VERIFIED_LOGINS_KEY = "silverlingo_verified_first_logins";
 const STORAGE_HOSTS_KEY = "silverlingo_custom_hosts";
 const STORAGE_MEETINGS_KEY = "silverlingo_scheduled_meetings";
 const STORAGE_NOTIFS_KEY = "silverlingo_notification_log";
@@ -528,46 +538,65 @@ export function UserProfileProvider({
     return finalProfile;
   };
 
-  const identifyExistingUser = async (params: {
+  const isUserFirstLoginVerified = (
+    candidate: UserProfile,
+    dbStreakDays?: number
+  ): boolean => {
+    if (candidate.firstLoginVerified) return true;
+    if (typeof dbStreakDays === "number" && dbStreakDays >= 1) return true;
+    try {
+      const raw = window.localStorage.getItem(STORAGE_VERIFIED_LOGINS_KEY);
+      const list: string[] = raw ? JSON.parse(raw) : [];
+      const keys = [
+        candidate.id,
+        candidate.email?.toLowerCase(),
+        candidate.phone,
+      ].filter(Boolean) as string[];
+      return keys.some((k) => list.includes(k));
+    } catch {
+      return false;
+    }
+  };
+
+  const lookupUserForLogin = async (params: {
     email?: string;
     phoneE164?: string;
-  }): Promise<UserProfile | null> => {
+  }): Promise<{
+    user: UserProfile;
+    requiresFirstLoginVerification: boolean;
+  } | null> => {
     const cleanEmail = params.email?.trim().toLowerCase();
     const cleanPhone = params.phoneE164?.trim();
 
-    // 1. Check active profile first
+    let localMatch: UserProfile | null = null;
+
+    // 1. Check active profile or localStorage registered accounts
     if (profile) {
       if (
         (cleanEmail && profile.email?.toLowerCase() === cleanEmail) ||
         (cleanPhone && profile.phone === cleanPhone)
       ) {
-        return profile;
+        localMatch = profile;
       }
     }
 
-    // 2. Check registered accounts & customHosts in localStorage (preserves uploaded camera/device photo after Sign Out)
-    try {
-      const accountsRaw = window.localStorage.getItem(STORAGE_ACCOUNTS_KEY);
-      const storedAccounts: UserProfile[] = accountsRaw
-        ? JSON.parse(accountsRaw)
-        : [];
-      const allLocalPool = [...storedAccounts, ...customHosts];
-      const matchedLocal = allLocalPool.find(
-        (acc) =>
-          (cleanEmail && acc.email?.toLowerCase() === cleanEmail) ||
-          (cleanPhone && acc.phone === cleanPhone)
-      );
-      if (matchedLocal) {
-        setProfile(matchedLocal);
-        window.localStorage.setItem(
-          STORAGE_PROFILE_KEY,
-          JSON.stringify(matchedLocal)
-        );
-        return matchedLocal;
-      }
-    } catch {}
+    if (!localMatch) {
+      try {
+        const accountsRaw = window.localStorage.getItem(STORAGE_ACCOUNTS_KEY);
+        const storedAccounts: UserProfile[] = accountsRaw
+          ? JSON.parse(accountsRaw)
+          : [];
+        const allLocalPool = [...storedAccounts, ...customHosts];
+        localMatch =
+          allLocalPool.find(
+            (acc) =>
+              (cleanEmail && acc.email?.toLowerCase() === cleanEmail) ||
+              (cleanPhone && acc.phone === cleanPhone)
+          ) || null;
+      } catch {}
+    }
 
-    // 3. Check Supabase public.users
+    // 2. Check Supabase public.users
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
@@ -593,41 +622,141 @@ export function UserProfileProvider({
             id: dbUser.id,
             role: dbUser.role,
             fullName: dbUser.full_name,
-            email: dbUser.email || cleanEmail,
-            phone: dbUser.phone || cleanPhone,
-            age: dbUser.age || 18,
-            country: dbUser.country || "United States",
-            city: dbUser.city || "New York",
+            email: dbUser.email || cleanEmail || localMatch?.email,
+            phone: dbUser.phone || cleanPhone || localMatch?.phone,
+            age: dbUser.age || localMatch?.age || 18,
+            country: dbUser.country || localMatch?.country || "United States",
+            city: dbUser.city || localMatch?.city || "New York",
             formerRole:
               dbUser.former_role ||
+              localMatch?.formerRole ||
               (dbUser.role === "elderly"
                 ? "Native English Host"
                 : "Teen Learner"),
-            bio: dbUser.bio || "",
+            bio: dbUser.bio || localMatch?.bio || "",
             avatarUrl:
-              dbUser.avatar_url ||
+              (localMatch?.avatarUrl?.startsWith("data:")
+                ? localMatch.avatarUrl
+                : dbUser.avatar_url) ||
               (dbUser.role === "elderly"
                 ? "/avatars/arthur.png"
                 : "/avatars/mateo.png"),
             hobbies:
-              hobbyNames.length > 0 ? hobbyNames : ["Football / Soccer"],
+              hobbyNames.length > 0
+                ? hobbyNames
+                : localMatch?.hobbies || ["Football / Soccer"],
             contact: dbUser.email || dbUser.phone,
-            timezone: dbUser.timezone || "America/New_York",
+            timezone:
+              dbUser.timezone || localMatch?.timezone || "America/New_York",
           };
 
-          setProfile(loadedProfile);
-          window.localStorage.setItem(
-            STORAGE_PROFILE_KEY,
-            JSON.stringify(loadedProfile)
+          const alreadyVerified = isUserFirstLoginVerified(
+            loadedProfile,
+            dbUser.streak_days
           );
-          return loadedProfile;
+          loadedProfile.firstLoginVerified = alreadyVerified;
+
+          return {
+            user: loadedProfile,
+            requiresFirstLoginVerification: !alreadyVerified,
+          };
         }
       } catch {
-        // Ignore if email/phone columns not yet added
+        // Fallback to localMatch below
       }
     }
 
+    if (localMatch) {
+      const alreadyVerified = isUserFirstLoginVerified(localMatch);
+      const userWithFlag: UserProfile = {
+        ...localMatch,
+        firstLoginVerified: alreadyVerified,
+      };
+      return {
+        user: userWithFlag,
+        requiresFirstLoginVerification: !alreadyVerified,
+      };
+    }
+
     return null;
+  };
+
+  const completeFirstLoginVerification = async (
+    user: UserProfile
+  ): Promise<UserProfile> => {
+    const verifiedUser: UserProfile = {
+      ...user,
+      firstLoginVerified: true,
+    };
+
+    // 1. Save verified keys in localStorage
+    try {
+      const raw = window.localStorage.getItem(STORAGE_VERIFIED_LOGINS_KEY);
+      const list: string[] = raw ? JSON.parse(raw) : [];
+      const keysToAdd = [
+        verifiedUser.id,
+        verifiedUser.email?.toLowerCase(),
+        verifiedUser.phone,
+      ].filter(Boolean) as string[];
+      const merged = Array.from(new Set([...list, ...keysToAdd]));
+      window.localStorage.setItem(
+        STORAGE_VERIFIED_LOGINS_KEY,
+        JSON.stringify(merged)
+      );
+    } catch {}
+
+    // 2. Update local registered accounts pool
+    try {
+      const accountsRaw = window.localStorage.getItem(STORAGE_ACCOUNTS_KEY);
+      const storedAccounts: UserProfile[] = accountsRaw
+        ? JSON.parse(accountsRaw)
+        : [];
+      const filtered = storedAccounts.filter(
+        (acc) =>
+          acc.id !== verifiedUser.id &&
+          (!verifiedUser.email ||
+            acc.email?.toLowerCase() !== verifiedUser.email.toLowerCase()) &&
+          (!verifiedUser.phone || acc.phone !== verifiedUser.phone)
+      );
+      window.localStorage.setItem(
+        STORAGE_ACCOUNTS_KEY,
+        JSON.stringify([verifiedUser, ...filtered])
+      );
+    } catch {}
+
+    // 3. Persist first-login verified state in Supabase public.users (streak_days = 1)
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase
+          .from("users")
+          .update({ streak_days: 1 })
+          .eq("id", verifiedUser.id);
+      } catch {}
+    }
+
+    // 4. Sign the user in
+    setProfile(verifiedUser);
+    window.localStorage.setItem(
+      STORAGE_PROFILE_KEY,
+      JSON.stringify(verifiedUser)
+    );
+
+    return verifiedUser;
+  };
+
+  const identifyExistingUser = async (params: {
+    email?: string;
+    phoneE164?: string;
+  }): Promise<UserProfile | null> => {
+    const result = await lookupUserForLogin(params);
+    if (!result) return null;
+    setProfile(result.user);
+    window.localStorage.setItem(
+      STORAGE_PROFILE_KEY,
+      JSON.stringify(result.user)
+    );
+    return result.user;
   };
 
   const recordMeetingBooked = async (meeting: ScheduledMeeting) => {
@@ -784,6 +913,8 @@ export function UserProfileProvider({
         notifications,
         saveProfile,
         identifyExistingUser,
+        lookupUserForLogin,
+        completeFirstLoginVerification,
         recordMeetingBooked,
         rescheduleMeeting,
         cancelMeeting,

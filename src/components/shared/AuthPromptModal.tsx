@@ -5,11 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
-import { useUserProfile } from "@/context/UserProfileContext";
+import { useUserProfile, type UserProfile } from "@/context/UserProfileContext";
 import {
   COUNTRY_CALLING_CODES,
   validatePhoneForCountryCode,
 } from "@/lib/location-timezone";
+import { sendFirstLoginVerificationCode } from "@/lib/verification";
 import {
   Lock,
   Mail,
@@ -20,6 +21,9 @@ import {
   ArrowRight,
   ArrowLeft,
   AlertCircle,
+  KeyRound,
+  CheckCircle2,
+  RefreshCw,
 } from "lucide-react";
 
 export interface AuthPromptDetail {
@@ -38,7 +42,8 @@ export function openAuthPromptModal(detail?: AuthPromptDetail) {
 export default function AuthPromptModal() {
   const router = useRouter();
   const { lang, isRTL } = useLanguage();
-  const { identifyExistingUser } = useUserProfile();
+  const { lookupUserForLogin, completeFirstLoginVerification } =
+    useUserProfile();
   const ForwardArrow = isRTL ? ArrowLeft : ArrowRight;
 
   const [isOpen, setIsOpen] = useState(false);
@@ -53,11 +58,21 @@ export default function AuthPromptModal() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [notFoundContact, setNotFoundContact] = useState<string | null>(null);
 
+  // First-time login verification state
+  const [pendingUser, setPendingUser] = useState<UserProfile | null>(null);
+  const [formattedContact, setFormattedContact] = useState("");
+  const [expectedCode, setExpectedCode] = useState("");
+  const [enteredCode, setEnteredCode] = useState("");
+  const [codeMessagePreview, setCodeMessagePreview] = useState("");
+
   useEffect(() => {
     const handleOpen = (e: Event) => {
       const customEvent = e as CustomEvent<AuthPromptDetail | undefined>;
       setActionDetail(customEvent.detail || null);
       setShowSignInForm(false);
+      setPendingUser(null);
+      setExpectedCode("");
+      setEnteredCode("");
       setErrorMsg(null);
       setNotFoundContact(null);
       setIsOpen(true);
@@ -71,6 +86,9 @@ export default function AuthPromptModal() {
 
   const handleClose = () => {
     setIsOpen(false);
+    setPendingUser(null);
+    setExpectedCode("");
+    setEnteredCode("");
     setErrorMsg(null);
     setNotFoundContact(null);
   };
@@ -97,6 +115,14 @@ export default function AuthPromptModal() {
       phoneLabel: "2. Select Calling Code & Enter Phone Number:",
       signInBtn: "Sign In Now",
       checking: "Checking Account...",
+      verifyTitle: "First-Time Login Verification",
+      verifySub:
+        "We sent a 6-digit verification code (required only on your first sign-in) to:",
+      codeLabel: "Enter 6-Digit Verification Code:",
+      verifyBtn: "Verify Code & Sign In",
+      resendBtn: "Resend Code",
+      invalidCodeErr:
+        "Incorrect verification code. Please check the 6-digit code and try again.",
       cancelBtn: "Cancel",
       notFoundTitle: "Account not registered yet!",
       notFoundBody:
@@ -120,6 +146,14 @@ export default function AuthPromptModal() {
       phoneLabel: "2. בחרו קידומת מדינה והקלידו מספר טלפון:",
       signInBtn: "התחברות כעת",
       checking: "בודק חשבון...",
+      verifyTitle: "קוד אימות לכניסה ראשונה",
+      verifySub:
+        "שלחנו קוד אימות בן 6 ספרות (נדרש אך ורק בהתחברות הראשונה) אל:",
+      codeLabel: "הזינו קוד אימות בן 6 ספרות:",
+      verifyBtn: "אימות קוד וכניסה",
+      resendBtn: "שלח קוד מחדש",
+      invalidCodeErr:
+        "קוד האימות שגוי. נא לבדוק את הקוד בן 6 הספרות ולנסות שוב.",
       cancelBtn: "ביטול",
       notFoundTitle: "החשבון עדיין לא רשום במערכת!",
       notFoundBody:
@@ -168,21 +202,81 @@ export default function AuthPromptModal() {
         cleanPhoneE164 = phoneCheck.e164;
       }
 
-      const foundProfile = await identifyExistingUser({
+      const targetContact = cleanEmail || cleanPhoneE164 || "";
+      setFormattedContact(targetContact);
+
+      const lookupResult = await lookupUserForLogin({
         email: cleanEmail,
         phoneE164: cleanPhoneE164,
       });
 
-      if (foundProfile) {
+      if (lookupResult) {
+        const { user, requiresFirstLoginVerification } = lookupResult;
+
+        if (requiresFirstLoginVerification) {
+          const dispatched = await sendFirstLoginVerificationCode({
+            userId: user.id,
+            recipientName: user.fullName,
+            recipientRole: user.role,
+            channel: method,
+            address: targetContact,
+          });
+          setPendingUser(user);
+          setExpectedCode(dispatched.code);
+          setEnteredCode("");
+          setCodeMessagePreview(dispatched.messagePreview);
+          return;
+        }
+
+        await completeFirstLoginVerification(user);
         setIsOpen(false);
         return;
       }
 
-      setNotFoundContact(cleanEmail || cleanPhoneE164 || "");
+      setNotFoundContact(targetContact);
     } catch (err: any) {
       setErrorMsg(
         err.message || "Could not verify your account. Please try again."
       );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    if (!pendingUser) return;
+
+    if (enteredCode.trim() !== expectedCode) {
+      setErrorMsg(t.invalidCodeErr);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await completeFirstLoginVerification(pendingUser);
+      handleClose();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (!pendingUser) return;
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const dispatched = await sendFirstLoginVerificationCode({
+        userId: pendingUser.id,
+        recipientName: pendingUser.fullName,
+        recipientRole: pendingUser.role,
+        channel: method,
+        address: formattedContact,
+      });
+      setExpectedCode(dispatched.code);
+      setEnteredCode("");
+      setCodeMessagePreview(dispatched.messagePreview);
     } finally {
       setLoading(false);
     }
@@ -237,7 +331,101 @@ export default function AuthPromptModal() {
                 {subtitleText}
               </p>
 
-              {notFoundContact ? (
+              {pendingUser ? (
+                <form
+                  onSubmit={handleVerifyCode}
+                  className="space-y-3.5 bg-purple-50 border-2 border-[#4A148C] rounded-2xl p-4"
+                  noValidate
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-[#4A148C] text-white flex items-center justify-center shrink-0">
+                      <KeyRound className="w-4 h-4 text-[#FF6D00]" />
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-sm sm:text-base text-slate-950">
+                        {t.verifyTitle}
+                      </div>
+                      <div className="text-xs font-bold text-slate-600">
+                        {pendingUser.fullName}
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-xs sm:text-sm text-slate-800 leading-snug">
+                    {t.verifySub}{" "}
+                    <strong className="underline" dir="ltr">
+                      {formattedContact}
+                    </strong>
+                  </p>
+
+                  {codeMessagePreview && (
+                    <div
+                      dir="ltr"
+                      className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-600 text-[11px] sm:text-xs font-mono font-bold text-emerald-950"
+                    >
+                      {codeMessagePreview}
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <label className="block text-xs sm:text-sm font-extrabold text-slate-950">
+                      {t.codeLabel}
+                    </label>
+                    <input
+                      dir="ltr"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      required
+                      value={enteredCode}
+                      onChange={(e) =>
+                        setEnteredCode(e.target.value.replace(/\D/g, ""))
+                      }
+                      placeholder="123456"
+                      className="w-full min-h-[48px] px-3 rounded-xl bg-white border-2 border-slate-900 text-center tracking-[0.3em] text-xl font-extrabold text-slate-950 focus:outline-none focus:border-[#4A148C]"
+                    />
+                  </div>
+
+                  {errorMsg && (
+                    <div className="p-2.5 rounded-xl bg-red-50 border border-red-700 text-red-950 text-xs font-bold">
+                      ⚠️ {errorMsg}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={loading || enteredCode.length < 6}
+                    className="w-full min-h-[48px] px-4 rounded-xl bg-[#FF6D00] hover:bg-[#E65100] text-white font-extrabold text-sm shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{t.verifyBtn}</span>
+                  </button>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      type="button"
+                      onClick={handleResendCode}
+                      className="inline-flex items-center gap-1 text-xs font-extrabold text-[#4A148C] hover:underline"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>{t.resendBtn}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingUser(null);
+                        setExpectedCode("");
+                        setEnteredCode("");
+                        setErrorMsg(null);
+                      }}
+                      className="text-xs font-bold text-slate-600 hover:text-slate-900"
+                    >
+                      {t.backToChoices}
+                    </button>
+                  </div>
+                </form>
+              ) : notFoundContact ? (
                 <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-600 space-y-3">
                   <div className="font-extrabold text-sm sm:text-base text-amber-950">
                     {t.notFoundTitle}

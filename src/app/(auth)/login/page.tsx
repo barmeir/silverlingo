@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
-import { useUserProfile } from "@/context/UserProfileContext";
+import { useUserProfile, type UserProfile } from "@/context/UserProfileContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 import {
   COUNTRY_CALLING_CODES,
   validatePhoneForCountryCode,
 } from "@/lib/location-timezone";
+import { sendFirstLoginVerificationCode } from "@/lib/verification";
 import {
   Mail,
   Smartphone,
@@ -22,6 +23,8 @@ import {
   Sparkles,
   UserPlus,
   LogIn,
+  KeyRound,
+  RefreshCw,
 } from "lucide-react";
 
 type AuthMethod = "email" | "phone";
@@ -30,7 +33,8 @@ export default function PasswordlessLoginPage() {
   const supabase = createClient();
   const router = useRouter();
   const { lang, isRTL } = useLanguage();
-  const { identifyExistingUser } = useUserProfile();
+  const { lookupUserForLogin, completeFirstLoginVerification } =
+    useUserProfile();
   const ForwardArrow = isRTL ? ArrowLeft : ArrowRight;
   const BackArrow = isRTL ? ArrowRight : ArrowLeft;
 
@@ -42,6 +46,12 @@ export default function PasswordlessLoginPage() {
   const [sent, setSent] = useState(false);
   const [formattedContact, setFormattedContact] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // First-time login verification code state
+  const [pendingUser, setPendingUser] = useState<UserProfile | null>(null);
+  const [expectedCode, setExpectedCode] = useState<string>("");
+  const [enteredCode, setEnteredCode] = useState<string>("");
+  const [codeMessagePreview, setCodeMessagePreview] = useState<string>("");
 
   const supabaseActive = isSupabaseConfigured();
   const selectedCodeObj =
@@ -73,6 +83,14 @@ export default function PasswordlessLoginPage() {
       sending: "Checking Account...",
       sendEmailBtn: "Sign In with Email",
       sendPhoneBtn: "Sign In with Phone Number",
+      verifyTitle: "First-Time Sign-In Verification Code",
+      verifySub1: "Since this is your first time signing in, we sent a 6-digit verification code to ",
+      verifySub2: " (required only on your first login).",
+      codeLabel: "Enter 6-Digit Verification Code:",
+      verifyBtn: "Verify Code & Sign In",
+      resendBtn: "Resend Verification Code",
+      invalidCodeErr: "Incorrect verification code. Please check the 6-digit code and try again.",
+      dispatchedNotice: "Verification code dispatched to your ",
       newHere: "Registration",
       reassurance: "Safe, password-free identification with automatic timezone sync.",
       helpFooter: "SilverLingo • Connecting Generations Across Time Zones",
@@ -101,6 +119,14 @@ export default function PasswordlessLoginPage() {
       sending: "בודק חשבון...",
       sendEmailBtn: "כניסה באמצעות אימייל",
       sendPhoneBtn: "כניסה באמצעות מספר טלפון",
+      verifyTitle: "קוד אימות לכניסה ראשונה",
+      verifySub1: "מכיוון שזו הכניסה הראשונה שלך למערכת, שלחנו קוד אימות בן 6 ספרות אל ",
+      verifySub2: " (נדרש אך ורק בהתחברות הראשונה).",
+      codeLabel: "הזינו קוד אימות בן 6 ספרות:",
+      verifyBtn: "אימות קוד וכניסה למערכת",
+      resendBtn: "שלח קוד אימות מחדש",
+      invalidCodeErr: "קוד האימות שגוי. נא לבדוק את הקוד בן 6 הספרות ולנסות שוב.",
+      dispatchedNotice: "קוד האימות נשלח אל ה",
       newHere: "הרשמה",
       reassurance: "זיהוי מהיר ובטוח ללא סיסמה עם סנכרון אזור זמן אוטומטי.",
       helpFooter: "SilverLingo • מחברים בין דורות ברחבי העולם",
@@ -142,14 +168,38 @@ export default function PasswordlessLoginPage() {
       }
 
       // 1. Check if this user is already registered in Supabase public.users or local profile
-      const existingProfile = await identifyExistingUser({
+      const lookupResult = await lookupUserForLogin({
         email: cleanEmail,
         phoneE164: cleanPhoneE164,
       });
 
-      if (existingProfile) {
+      if (lookupResult) {
+        const { user, requiresFirstLoginVerification } = lookupResult;
+
+        if (requiresFirstLoginVerification) {
+          const targetAddress =
+            (method === "email" ? cleanEmail || user.email : cleanPhoneE164 || user.phone) ||
+            formattedContact;
+
+          const dispatched = await sendFirstLoginVerificationCode({
+            userId: user.id,
+            recipientName: user.fullName,
+            recipientRole: user.role,
+            channel: method,
+            address: targetAddress,
+          });
+
+          setPendingUser(user);
+          setExpectedCode(dispatched.code);
+          setEnteredCode("");
+          setCodeMessagePreview(dispatched.messagePreview);
+          return;
+        }
+
+        // Already verified on first login -> sign in immediately without code
+        const verifiedProfile = await completeFirstLoginVerification(user);
         const dest =
-          existingProfile.role === "elderly" ? "/availability" : "/explore";
+          verifiedProfile.role === "elderly" ? "/availability" : "/explore";
         router.push(dest);
         return;
       }
@@ -171,6 +221,47 @@ export default function PasswordlessLoginPage() {
       setErrorMsg(
         err.message || "Could not verify your account. Please try again."
       );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyFirstLoginCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    if (!pendingUser) return;
+    if (enteredCode.trim() !== expectedCode) {
+      setErrorMsg(t.invalidCodeErr);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const verifiedProfile = await completeFirstLoginVerification(pendingUser);
+      const dest =
+        verifiedProfile.role === "elderly" ? "/availability" : "/explore";
+      router.push(dest);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (!pendingUser) return;
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const dispatched = await sendFirstLoginVerificationCode({
+        userId: pendingUser.id,
+        recipientName: pendingUser.fullName,
+        recipientRole: pendingUser.role,
+        channel: method,
+        address: formattedContact,
+      });
+      setExpectedCode(dispatched.code);
+      setEnteredCode("");
+      setCodeMessagePreview(dispatched.messagePreview);
     } finally {
       setLoading(false);
     }
@@ -213,7 +304,149 @@ export default function PasswordlessLoginPage() {
             </p>
           </header>
 
-          {sent ? (
+          {pendingUser ? (
+            /* First-Time Login 6-Digit Verification Code View */
+            <form
+              onSubmit={handleVerifyFirstLoginCode}
+              className="space-y-5 bg-purple-50/90 border-2 border-[#4A148C] rounded-3xl p-5 sm:p-8"
+              noValidate
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-[#4A148C] text-white flex items-center justify-center shrink-0 shadow-md">
+                  <KeyRound className="w-6 h-6 text-[#FF6D00]" />
+                </div>
+                <div>
+                  <h2 className="text-xl sm:text-[26px] font-extrabold text-slate-950 leading-tight">
+                    {t.verifyTitle}
+                  </h2>
+                  <p className="text-sm sm:text-base text-slate-700 font-semibold">
+                    {pendingUser.fullName}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-base sm:text-[18px] text-slate-800 leading-relaxed">
+                {t.verifySub1}
+                <strong className="underline decoration-2" dir="ltr">
+                  {formattedContact}
+                </strong>
+                {t.verifySub2}
+              </p>
+
+              {/* Notification Dispatch Confirmation Box */}
+              {codeMessagePreview && (
+                <div className="p-3.5 rounded-2xl bg-emerald-50 border-2 border-emerald-700 text-emerald-950 space-y-2">
+                  <div className="flex items-center justify-between gap-2 text-xs sm:text-sm font-extrabold">
+                    <span className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span>
+                        {t.dispatchedNotice}
+                        {method === "email"
+                          ? lang === "he"
+                            ? "אימייל:"
+                            : "Email:"
+                          : lang === "he"
+                          ? "טלפון (SMS):"
+                          : "Phone (SMS):"}
+                      </span>
+                    </span>
+                    {method === "phone" ? (
+                      <a
+                        href={`sms:${formattedContact}?body=${encodeURIComponent(
+                          codeMessagePreview
+                        )}`}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-700 text-white text-xs font-bold"
+                      >
+                        SMS
+                      </a>
+                    ) : (
+                      <a
+                        href={`mailto:${formattedContact}?subject=${encodeURIComponent(
+                          `SilverLingo Verification Code: ${expectedCode}`
+                        )}&body=${encodeURIComponent(codeMessagePreview)}`}
+                        className="px-2.5 py-1 rounded-lg bg-[#4A148C] text-white text-xs font-bold"
+                      >
+                        Email
+                      </a>
+                    )}
+                  </div>
+                  <div
+                    dir="ltr"
+                    className="p-2.5 rounded-xl bg-white border border-emerald-300 text-xs sm:text-sm font-mono font-bold text-slate-900"
+                  >
+                    {codeMessagePreview}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="verification-code-input"
+                  className="block text-base sm:text-[19px] font-extrabold text-slate-950"
+                >
+                  {t.codeLabel}
+                </label>
+                <input
+                  id="verification-code-input"
+                  dir="ltr"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  value={enteredCode}
+                  onChange={(e) =>
+                    setEnteredCode(e.target.value.replace(/\D/g, ""))
+                  }
+                  placeholder="123456"
+                  className="w-full min-h-[62px] px-4 rounded-2xl bg-white border-2 border-slate-900 text-center tracking-[0.35em] text-2xl sm:text-3xl font-extrabold text-slate-950 focus:outline-none focus:border-[#4A148C]"
+                />
+              </div>
+
+              {errorMsg && (
+                <div
+                  role="alert"
+                  className="p-4 rounded-2xl bg-red-50 border-2 border-red-800 text-red-950 text-base font-bold"
+                >
+                  ⚠️ {errorMsg}
+                </div>
+              )}
+
+              <div className="space-y-3 pt-1">
+                <button
+                  type="submit"
+                  disabled={loading || enteredCode.length < 6}
+                  className="w-full min-h-[62px] px-6 rounded-2xl bg-[#FF6D00] hover:bg-[#E65100] text-white font-extrabold text-lg sm:text-[21px] shadow-lg flex items-center justify-center gap-3 transition-all disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-6 h-6 shrink-0" />
+                  <span>{t.verifyBtn}</span>
+                </button>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleResendCode}
+                    className="inline-flex items-center gap-1.5 text-sm font-extrabold text-[#4A148C] hover:underline"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>{t.resendBtn}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingUser(null);
+                      setExpectedCode("");
+                      setEnteredCode("");
+                      setErrorMsg(null);
+                    }}
+                    className="text-sm font-bold text-slate-600 hover:text-slate-900"
+                  >
+                    {t.useDifferent}
+                  </button>
+                </div>
+              </div>
+            </form>
+          ) : sent ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
