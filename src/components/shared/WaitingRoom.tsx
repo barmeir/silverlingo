@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { formatUTCInZone, safeTimeZone } from "@/lib/timezone";
@@ -8,6 +8,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useUserProfile } from "@/context/UserProfileContext";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 import { openAuthPromptModal } from "@/components/shared/AuthPromptModal";
+import LiveWebRTCRoom from "@/components/shared/LiveWebRTCRoom";
 import { withBasePath } from "@/lib/assets";
 import {
   buildParticipantMessages,
@@ -31,8 +32,6 @@ import {
   XCircle,
   Copy,
   Check,
-  PhoneOff,
-  Camera,
 } from "lucide-react";
 
 interface WaitingRoomProps {
@@ -89,47 +88,7 @@ export default function WaitingRoom({
 
   // Embedded Live Video Room state
   const [inCall, setInCall] = useState(false);
-  const [videoProvider, setVideoProvider] = useState<
-    "ffmuc" | "jitsi" | "local_hardware"
-  >("ffmuc");
   const [copiedInvite, setCopiedInvite] = useState(false);
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const [localCameraError, setLocalCameraError] = useState<string | null>(null);
-
-  const stopLocalHardwareStream = useCallback(() => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((tr) => tr.stop());
-      localStreamRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    if (inCall && videoProvider === "local_hardware") {
-      setLocalCameraError(null);
-      navigator.mediaDevices
-        ?.getUserMedia({ video: true, audio: true })
-        .then((stream) => {
-          localStreamRef.current = stream;
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = stream;
-            localVideoRef.current.play().catch(() => {});
-          }
-        })
-        .catch(() => {
-          setLocalCameraError(
-            lang === "he"
-              ? "לא ניתן היה לגשת למצלמה או למיקרופון בדפדפן. בדקו הרשאות מצלמה."
-              : "Could not access camera/microphone. Please allow browser camera permissions."
-          );
-        });
-    } else {
-      stopLocalHardwareStream();
-    }
-    return () => {
-      stopLocalHardwareStream();
-    };
-  }, [inCall, videoProvider, stopLocalHardwareStream, lang]);
 
   // Extract a clean shared room slug so both Host and Learner join the exact same WebRTC room
   const rawSlug =
@@ -139,16 +98,12 @@ export default function WaitingRoom({
     ? rawSlug
     : `SilverLingo-${rawSlug}`;
 
-  const activeDisplayName = profile?.fullName || learnerName || "SilverLingo Guest";
-  const encodedName = encodeURIComponent(activeDisplayName);
-  const hashConfig = `#userInfo.displayName="${encodedName}"&config.prejoinConfig.enabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=false&config.disableDeepLinking=true`;
+  const activeDisplayName =
+    profile?.fullName || learnerName || "SilverLingo Guest";
+  const partnerDisplayName =
+    profile?.fullName === hostName ? learnerName : hostName;
 
-  const embeddedVideoUrl =
-    videoProvider === "jitsi"
-      ? `https://meet.jit.si/${roomSlug}${hashConfig}`
-      : `https://meet.ffmuc.net/${roomSlug}${hashConfig}`;
-
-  const directShareableVideoUrl = `https://meet.ffmuc.net/${roomSlug}#config.disableDeepLinking=true`;
+  const directShareableVideoUrl = `https://meet.jit.si/${roomSlug}`;
 
   const handleCopyInviteLink = async () => {
     try {
@@ -778,153 +733,12 @@ export default function WaitingRoom({
                   </p>
                 </>
               ) : (
-                <div className="rounded-3xl bg-slate-950 text-white border-4 border-[#4A148C] overflow-hidden shadow-2xl space-y-0">
-                  {/* Top Bar of Embedded Video Room */}
-                  <div className="p-3.5 sm:p-4 bg-gradient-to-r from-[#2A0854] via-[#4A148C] to-[#1A0436] flex flex-wrap items-center justify-between gap-3 border-b border-white/15">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
-                      <span className="font-extrabold text-sm sm:text-base text-white">
-                        {lang === "he"
-                          ? `שיחת וידאו חיה: ${roomSlug}`
-                          : `Live 1-on-1 Video Room: ${roomSlug}`}
-                      </span>
-                    </div>
-
-                    {/* Server / Mode Switcher */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setVideoProvider("ffmuc")}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-colors ${
-                          videoProvider === "ffmuc"
-                            ? "bg-[#FF6D00] text-white"
-                            : "bg-white/10 text-purple-200 hover:bg-white/20"
-                        }`}
-                      >
-                        {lang === "he"
-                          ? "שרת מהיר (ללא התחברות)"
-                          : "Instant Room (No Login)"}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setVideoProvider("jitsi")}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-colors ${
-                          videoProvider === "jitsi"
-                            ? "bg-[#FF6D00] text-white"
-                            : "bg-white/10 text-purple-200 hover:bg-white/20"
-                        }`}
-                      >
-                        Jitsi Cloud
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setVideoProvider("local_hardware")}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition-colors ${
-                          videoProvider === "local_hardware"
-                            ? "bg-[#FF6D00] text-white"
-                            : "bg-white/10 text-purple-200 hover:bg-white/20"
-                        }`}
-                      >
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>
-                          {lang === "he" ? "בדיקת מצלמה" : "Camera Check"}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Embedded WebRTC Iframe or Local Camera Hardware Check */}
-                  {videoProvider === "local_hardware" ? (
-                    <div className="p-6 bg-slate-900 flex flex-col items-center justify-center space-y-4 min-h-[420px]">
-                      <div className="w-full max-w-md aspect-video rounded-2xl overflow-hidden bg-black border-2 border-purple-400/50 relative">
-                        <video
-                          ref={localVideoRef}
-                          autoPlay
-                          playsInline
-                          muted
-                          className="w-full h-full object-cover scale-x-[-1]"
-                        />
-                      </div>
-                      {localCameraError ? (
-                        <p className="text-sm text-red-300 font-bold text-center">
-                          {localCameraError}
-                        </p>
-                      ) : (
-                        <p className="text-xs sm:text-sm text-emerald-300 font-bold text-center">
-                          {lang === "he"
-                            ? "✓ המצלמה והמיקרופון שלך פועלים! לחצו על ׳שרת מהיר (ללא התחברות)׳ למעלה לשיחה עם משתתף שני."
-                            : "✓ Your local camera & microphone are active! Switch to 'Instant Room (No Login)' above to talk with a 2nd participant."}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="w-full h-[480px] sm:h-[580px] bg-black">
-                      <iframe
-                        key={embeddedVideoUrl}
-                        src={embeddedVideoUrl}
-                        title="SilverLingo 1-on-1 Live Video Call"
-                        allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write"
-                        className="w-full h-full border-0"
-                      />
-                    </div>
-                  )}
-
-                  {/* Bottom Controls Bar of Video Player */}
-                  <div className="p-3.5 sm:p-4 bg-slate-900 border-t border-white/15 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleCopyInviteLink}
-                        className="min-h-[42px] px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm inline-flex items-center gap-1.5 transition-colors"
-                      >
-                        {copiedInvite ? (
-                          <Check className="w-4 h-4 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-4 h-4 text-purple-300" />
-                        )}
-                        <span>
-                          {copiedInvite
-                            ? lang === "he"
-                              ? "הקישור הועתק!"
-                              : "Invite Link Copied!"
-                            : lang === "he"
-                            ? "העתק קישור למכשיר שני"
-                            : "Copy Link for 2nd Device"}
-                        </span>
-                      </button>
-
-                      <a
-                        href={directShareableVideoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="min-h-[42px] px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm inline-flex items-center gap-1.5 transition-colors"
-                      >
-                        <ExternalLink className="w-4 h-4 text-amber-300" />
-                        <span>
-                          {lang === "he"
-                            ? "פתח במסך מלא / טאב חדש"
-                            : "Open in Full Browser Tab"}
-                        </span>
-                      </a>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        stopLocalHardwareStream();
-                        setInCall(false);
-                      }}
-                      className="min-h-[42px] px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs sm:text-sm inline-flex items-center gap-2 shadow-md transition-colors"
-                    >
-                      <PhoneOff className="w-4 h-4" />
-                      <span>
-                        {lang === "he" ? "סיום שיחת וידאו" : "Leave Video Call"}
-                      </span>
-                    </button>
-                  </div>
-                </div>
+                <LiveWebRTCRoom
+                  roomSlug={roomSlug}
+                  myDisplayName={activeDisplayName}
+                  partnerDisplayName={partnerDisplayName}
+                  onLeave={() => setInCall(false)}
+                />
               )}
             </div>
           )}
