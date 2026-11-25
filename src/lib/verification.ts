@@ -9,11 +9,13 @@ export interface VerificationDispatchResult {
   channel: "email" | "phone";
   address: string;
   messagePreview: string;
+  providerSent: boolean;
+  providerName: string;
 }
 
 /**
  * Generates a 6-digit verification code for first-time login and dispatches it
- * to the user's Email or Phone Number via backend API + Supabase notification log.
+ * to the user's Email or Phone Number via Cloudflare Worker / Next.js API + Supabase Auth OTP + Supabase notification log.
  */
 export async function sendFirstLoginVerificationCode(params: {
   userId?: string;
@@ -36,10 +38,17 @@ export async function sendFirstLoginVerificationCode(params: {
       ? `SilverLingo SMS to ${address}: Your first-time login verification code is ${code}`
       : `SilverLingo Email to ${address}: Your first-time login verification code is ${code}`;
 
-  // 1. Trigger server-side Email (Resend) or SMS (Twilio) if API route is available
+  let providerSent = false;
+  let providerName = "instant_code";
+
+  // 1. Trigger Cloudflare Worker / Next.js API route (Twilio / Textbelt for SMS, Resend for Email)
   if (typeof window !== "undefined") {
     try {
-      await fetch(withBasePath("/api/auth/send-code"), {
+      const apiEndpoint = window.location.hostname.includes("github.io")
+        ? "https://silverlingo.silverlingo.workers.dev/api/auth/send-code"
+        : withBasePath("/api/auth/send-code");
+
+      const res = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -49,15 +58,44 @@ export async function sendFirstLoginVerificationCode(params: {
           recipientName,
         }),
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.providerSent) {
+          providerSent = true;
+          providerName = data.provider || "server";
+        }
+      }
     } catch {
-      // Static export environment falls back to Supabase log + instant code banner
+      // Fallback to Supabase Auth & instant verification banner below
     }
   }
 
-  // 2. Record the verification notification in Supabase public.meeting_notifications
+  // 2. If Email channel and Resend wasn't used, also trigger Supabase Auth built-in Email OTP
   if (isSupabaseConfigured()) {
     try {
       const supabase = createBrowserSupabase();
+
+      if (channel === "email" && !providerSent) {
+        supabase.auth
+          .signInWithOtp({
+            email: address,
+            options: {
+              shouldCreateUser: true,
+              emailRedirectTo:
+                typeof window !== "undefined"
+                  ? `${window.location.origin}/auth/callback`
+                  : undefined,
+            },
+          })
+          .then(({ error }) => {
+            if (!error) {
+              providerSent = true;
+              providerName = "supabase_email";
+            }
+          }, () => {});
+      }
+
+      // 3. Record the verification notification in Supabase public.meeting_notifications
       const isUuid =
         userId &&
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -88,5 +126,7 @@ export async function sendFirstLoginVerificationCode(params: {
     channel,
     address,
     messagePreview,
+    providerSent,
+    providerName,
   };
 }

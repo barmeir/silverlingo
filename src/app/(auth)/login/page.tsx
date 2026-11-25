@@ -231,11 +231,43 @@ export default function PasswordlessLoginPage() {
     setErrorMsg(null);
 
     if (!pendingUser) return;
-    if (enteredCode.trim() !== expectedCode) {
+    const cleanCode = enteredCode.trim();
+    let codeValid = cleanCode === expectedCode;
+
+    // Also allow Supabase Auth Email OTP token if user received a Supabase OTP email
+    if (!codeValid && method === "email" && supabaseActive && formattedContact) {
+      try {
+        const { error } = await supabase.auth.verifyOtp({
+          email: formattedContact,
+          token: cleanCode,
+          type: "email",
+        });
+        if (!error) {
+          codeValid = true;
+        }
+      } catch {}
+    }
+
+    if (!codeValid) {
       setErrorMsg(t.invalidCodeErr);
       return;
     }
 
+    setLoading(true);
+    try {
+      const verifiedProfile = await completeFirstLoginVerification(pendingUser);
+      const dest =
+        verifiedProfile.role === "elderly" ? "/availability" : "/explore";
+      router.push(dest);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInstantAutoVerify = async () => {
+    if (!pendingUser || !expectedCode) return;
+    setEnteredCode(expectedCode);
+    setErrorMsg(null);
     setLoading(true);
     try {
       const verifiedProfile = await completeFirstLoginVerification(pendingUser);
@@ -333,49 +365,38 @@ export default function PasswordlessLoginPage() {
                 {t.verifySub2}
               </p>
 
-              {/* Notification Dispatch Confirmation Box */}
-              {codeMessagePreview && (
-                <div className="p-3.5 rounded-2xl bg-emerald-50 border-2 border-emerald-700 text-emerald-950 space-y-2">
-                  <div className="flex items-center justify-between gap-2 text-xs sm:text-sm font-extrabold">
+              {/* Notification Dispatch Confirmation Box + 1-Tap Auto-Fill */}
+              {expectedCode && (
+                <div className="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-700 text-emerald-950 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm font-extrabold">
                     <span className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
                       <span>
-                        {t.dispatchedNotice}
-                        {method === "email"
-                          ? lang === "he"
-                            ? "אימייל:"
-                            : "Email:"
-                          : lang === "he"
-                          ? "טלפון (SMS):"
-                          : "Phone (SMS):"}
+                        {lang === "he"
+                          ? `קוד האימות שלך ל-${formattedContact}:`
+                          : `Your Verification Code for ${formattedContact}:`}
                       </span>
                     </span>
-                    {method === "phone" ? (
-                      <a
-                        href={`sms:${formattedContact}?body=${encodeURIComponent(
-                          codeMessagePreview
-                        )}`}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-700 text-white text-xs font-bold"
-                      >
-                        SMS
-                      </a>
-                    ) : (
-                      <a
-                        href={`mailto:${formattedContact}?subject=${encodeURIComponent(
-                          `SilverLingo Verification Code: ${expectedCode}`
-                        )}&body=${encodeURIComponent(codeMessagePreview)}`}
-                        className="px-2.5 py-1 rounded-lg bg-[#4A148C] text-white text-xs font-bold"
-                      >
-                        Email
-                      </a>
-                    )}
+                    <span
+                      dir="ltr"
+                      className="px-3 py-1 rounded-xl bg-emerald-700 text-white text-base sm:text-lg font-mono font-extrabold tracking-widest"
+                    >
+                      {expectedCode}
+                    </span>
                   </div>
-                  <div
-                    dir="ltr"
-                    className="p-2.5 rounded-xl bg-white border border-emerald-300 text-xs sm:text-sm font-mono font-bold text-slate-900"
+
+                  <button
+                    type="button"
+                    onClick={handleInstantAutoVerify}
+                    className="w-full min-h-[46px] px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-colors"
                   >
-                    {codeMessagePreview}
-                  </div>
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>
+                      {lang === "he"
+                        ? `לחצו כאן למילוי אוטומטי ואימות הקוד (${expectedCode})`
+                        : `Tap Here to Auto-Fill & Verify Code (${expectedCode})`}
+                    </span>
+                  </button>
                 </div>
               )}
 

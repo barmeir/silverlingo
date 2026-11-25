@@ -586,6 +586,16 @@ export function UserProfileProvider({
   } | null> => {
     const cleanEmail = params.email?.trim().toLowerCase();
     const cleanPhone = params.phoneE164?.trim();
+    const phoneDigitsOnly = cleanPhone ? cleanPhone.replace(/\D/g, "") : "";
+    const phoneTail9 =
+      phoneDigitsOnly.length >= 9 ? phoneDigitsOnly.slice(-9) : "";
+
+    const matchesPhone = (storedPhone?: string) => {
+      if (!cleanPhone || !storedPhone) return false;
+      if (storedPhone === cleanPhone) return true;
+      const storedDigits = storedPhone.replace(/\D/g, "");
+      return Boolean(phoneTail9 && storedDigits.endsWith(phoneTail9));
+    };
 
     let localMatch: UserProfile | null = null;
 
@@ -593,7 +603,7 @@ export function UserProfileProvider({
     if (profile) {
       if (
         (cleanEmail && profile.email?.toLowerCase() === cleanEmail) ||
-        (cleanPhone && profile.phone === cleanPhone)
+        matchesPhone(profile.phone)
       ) {
         localMatch = profile;
       }
@@ -610,7 +620,7 @@ export function UserProfileProvider({
           allLocalPool.find(
             (acc) =>
               (cleanEmail && acc.email?.toLowerCase() === cleanEmail) ||
-              (cleanPhone && acc.phone === cleanPhone)
+              matchesPhone(acc.phone)
           ) || null;
       } catch {}
     }
@@ -619,14 +629,34 @@ export function UserProfileProvider({
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        let query = supabase.from("users").select("*");
+        let foundUsers: any[] | null = null;
+
         if (cleanEmail) {
-          query = query.ilike("email", cleanEmail);
+          const { data } = await supabase
+            .from("users")
+            .select("*")
+            .ilike("email", cleanEmail)
+            .limit(1);
+          foundUsers = data;
         } else if (cleanPhone) {
-          query = query.eq("phone", cleanPhone);
+          const { data: exactData } = await supabase
+            .from("users")
+            .select("*")
+            .eq("phone", cleanPhone)
+            .limit(1);
+
+          if (exactData && exactData.length > 0) {
+            foundUsers = exactData;
+          } else if (phoneTail9) {
+            const { data: suffixData } = await supabase
+              .from("users")
+              .select("*")
+              .ilike("phone", `%${phoneTail9}`)
+              .limit(1);
+            foundUsers = suffixData;
+          }
         }
 
-        const { data: foundUsers } = await query.limit(1);
         const dbUser = foundUsers?.[0];
         if (dbUser) {
           const { data: dbHobbies } = await supabase

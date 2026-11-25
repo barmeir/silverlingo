@@ -1,7 +1,9 @@
 {
   "name": "silverlingo",
+  "main": "./worker.mjs",
   "compatibility_date": "2025-04-01",
   "assets": {
-    "directory": "./out"
+    "directory": "./out",
+    "binding": "ASSETS"
   }
 }

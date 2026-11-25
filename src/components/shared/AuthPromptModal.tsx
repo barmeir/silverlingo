@@ -262,6 +262,19 @@ export default function AuthPromptModal() {
     }
   };
 
+  const handleInstantAutoVerify = async () => {
+    if (!pendingUser || !expectedCode) return;
+    setEnteredCode(expectedCode);
+    setErrorMsg(null);
+    setLoading(true);
+    try {
+      await completeFirstLoginVerification(pendingUser);
+      handleClose();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleResendCode = async () => {
     if (!pendingUser) return;
     setLoading(true);
@@ -358,12 +371,33 @@ export default function AuthPromptModal() {
                     </strong>
                   </p>
 
-                  {codeMessagePreview && (
-                    <div
-                      dir="ltr"
-                      className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-600 text-[11px] sm:text-xs font-mono font-bold text-emerald-950"
-                    >
-                      {codeMessagePreview}
+                  {expectedCode && (
+                    <div className="p-3 rounded-xl bg-emerald-50 border-2 border-emerald-600 space-y-2">
+                      <div className="flex items-center justify-between gap-2 text-xs font-extrabold text-emerald-950">
+                        <span>
+                          {lang === "he"
+                            ? "קוד האימות שלך:"
+                            : "Your Verification Code:"}
+                        </span>
+                        <span
+                          dir="ltr"
+                          className="px-2.5 py-0.5 rounded-lg bg-emerald-700 text-white text-sm font-mono font-extrabold tracking-widest"
+                        >
+                          {expectedCode}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleInstantAutoVerify}
+                        className="w-full min-h-[40px] px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>
+                          {lang === "he"
+                            ? `לחצו למילוי אוטומטי ואימות (${expectedCode})`
+                            : `Tap to Auto-Fill & Verify (${expectedCode})`}
+                        </span>
+                      </button>
                     </div>
                   )}
 

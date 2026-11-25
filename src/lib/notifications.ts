@@ -351,10 +351,14 @@ export async function logNotificationsToSupabase(
     }
   }
 
-  // Also trigger server-side SMS (Twilio) & Email (Resend) dispatch when not already sent by /api/meetings/book
+  // Also trigger server-side SMS (Twilio/Textbelt) & Email (Resend) dispatch when not already sent by /api/meetings/book
   if (typeof window !== "undefined" && !payload.skipServerDispatch) {
     try {
-      await fetch(withBasePath("/api/meetings/notify"), {
+      const apiEndpoint = window.location.hostname.includes("github.io")
+        ? "https://silverlingo.silverlingo.workers.dev/api/meetings/notify"
+        : withBasePath("/api/meetings/notify");
+
+      await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -365,6 +369,12 @@ export async function logNotificationsToSupabase(
           scheduledStartUTC: payload.scheduledStartUTC,
           googleMeetLink: payload.googleMeetLink,
           aiIcebreaker: payload.aiIcebreaker,
+          hostSmsBody: hostMsgs.smsBody,
+          hostEmailSubject: hostMsgs.emailSubject,
+          hostEmailBody: hostMsgs.emailBody,
+          learnerSmsBody: learnerMsgs.smsBody,
+          learnerEmailSubject: learnerMsgs.emailSubject,
+          learnerEmailBody: learnerMsgs.emailBody,
         }),
       });
     } catch {

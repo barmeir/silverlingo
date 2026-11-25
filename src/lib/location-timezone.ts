@@ -464,23 +464,43 @@ export function validatePhoneForCountryCode(
   errorEn?: string;
   errorHe?: string;
 } {
-  const codeOption =
-    COUNTRY_CALLING_CODES.find((c) => c.code === callingCode) ||
-    COUNTRY_CALLING_CODES[0];
-
   // Strip spaces, dashes, parentheses, dots
   let cleaned = rawPhone.replace(/[\s\-().]/g, "");
+  let effectiveCallingCode = callingCode;
+
+  // If user pasted a full international phone number starting with '+' (e.g. +972523609640), auto-detect its calling code
+  if (cleaned.startsWith("+")) {
+    const matchedCode = [...COUNTRY_CALLING_CODES]
+      .sort((a, b) => b.code.length - a.code.length)
+      .find((c) => cleaned.startsWith(c.code));
+    if (matchedCode) {
+      effectiveCallingCode = matchedCode.code;
+      cleaned = cleaned.slice(matchedCode.code.length);
+    }
+  }
+
+  // If user typed an Israeli mobile number starting with '05' (10 digits, e.g. 0523609640) while dropdown was still on '+1'
+  if (
+    effectiveCallingCode === "+1" &&
+    /^05\d{8}$/.test(cleaned)
+  ) {
+    effectiveCallingCode = "+972";
+  }
+
+  const codeOption =
+    COUNTRY_CALLING_CODES.find((c) => c.code === effectiveCallingCode) ||
+    COUNTRY_CALLING_CODES[0];
 
   // If user pasted the calling code inside the phone field, strip it first
-  const numericCode = callingCode.replace("+", "");
-  if (cleaned.startsWith(callingCode)) {
-    cleaned = cleaned.slice(callingCode.length);
+  const numericCode = effectiveCallingCode.replace("+", "");
+  if (cleaned.startsWith(effectiveCallingCode)) {
+    cleaned = cleaned.slice(effectiveCallingCode.length);
   } else if (cleaned.startsWith(`00${numericCode}`)) {
     cleaned = cleaned.slice(numericCode.length + 2);
   }
 
   // Strip leading trunk '0' for countries that use a domestic trunk prefix (e.g., Israel 050..., UK 07..., etc.)
-  if (callingCode !== "+1" && cleaned.startsWith("0")) {
+  if (effectiveCallingCode !== "+1" && cleaned.startsWith("0")) {
     cleaned = cleaned.slice(1);
   }
 
@@ -513,7 +533,7 @@ export function validatePhoneForCountryCode(
 
   return {
     valid: true,
-    e164: `${callingCode}${cleaned}`,
+    e164: `${effectiveCallingCode}${cleaned}`,
     nationalNumber: cleaned,
   };
 }
